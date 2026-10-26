@@ -17,13 +17,14 @@ import java.net.Socket
 
 class MainActivity : Activity() {
     private val bg = Color.rgb(18, 19, 21)
-    private val yellow = Color.rgb(255, 197, 48)
     private val red = Color.rgb(226, 38, 45)
     private val green = Color.rgb(55, 205, 105)
+    private val yellow = Color.rgb(255, 197, 48)
     private val internalKey = "argentas-local-control-v1"
     @Volatile private var serverAddress: String? = null
-    @Volatile private var requestedOn = false
+    @Volatile private var hotspotOn = false
     private lateinit var statusLight: TextView
+    private lateinit var statusText: TextView
     private lateinit var button: Button
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -34,49 +35,97 @@ class MainActivity : Activity() {
             setPadding(28, 28, 28, 28)
             setBackgroundColor(bg)
         }
+        val title = TextView(this).apply {
+            text = "ARGENTAS · INVITADOS"
+            textSize = 20f
+            gravity = Gravity.CENTER
+            setTextColor(Color.WHITE)
+            setPadding(0, 0, 0, 28)
+        }
         statusLight = TextView(this).apply {
             text = "●"
-            textSize = 48f
+            textSize = 64f
             gravity = Gravity.CENTER
             setTextColor(red)
-            setPadding(0, 0, 0, 28)
-            contentDescription = "Sin conexión con la tablet"
+            contentDescription = "Estado del hotspot desconocido"
+        }
+        statusText = TextView(this).apply {
+            text = "Desconectado"
+            textSize = 22f
+            gravity = Gravity.CENTER
+            setTextColor(red)
+            setPadding(0, 4, 0, 28)
         }
         button = Button(this).apply {
             text = "ACTIVAR HOTSPOT"
             textSize = 17f
             isAllCaps = false
             setTextColor(Color.BLACK)
-            setBackgroundColor(yellow)
+            setBackgroundColor(green)
             setOnClickListener {
+                isEnabled = false
                 val address = serverAddress
-                if (address == null) discoverAndSend("STATUS")
-                else send(if (requestedOn) "OFF" else "ON")
+                if (address == null) discoverAndSend(if (hotspotOn) "OFF" else "ON")
+                else send(if (hotspotOn) "OFF" else "ON")
             }
         }
-        root.addView(statusLight, LinearLayout.LayoutParams(-1, -2))
+        root.addView(title, LinearLayout.LayoutParams(-1, -2))
+        root.addView(statusLight, LinearLayout.LayoutParams(-1, 100))
+        root.addView(statusText, LinearLayout.LayoutParams(-1, -2))
         root.addView(button, LinearLayout.LayoutParams(-1, -2))
         setContentView(root)
         discoverAndSend("STATUS")
     }
 
-    private fun setDisconnected() {
-        statusLight.setTextColor(red)
-        statusLight.contentDescription = "Sin conexión con la tablet"
-        serverAddress = null
-        button.text = if (requestedOn) "DESACTIVAR HOTSPOT" else "ACTIVAR HOTSPOT"
-    }
-
-    private fun setConnected() {
-        statusLight.setTextColor(green)
-        statusLight.contentDescription = "Conectado a la tablet"
-        button.text = if (requestedOn) "DESACTIVAR HOTSPOT" else "ACTIVAR HOTSPOT"
-        button.setBackgroundColor(if (requestedOn) red else yellow)
-        button.setTextColor(if (requestedOn) Color.WHITE else Color.BLACK)
+    private fun renderState(state: String) {
+        runOnUiThread {
+            button.isEnabled = true
+            when (state) {
+                "enabled" -> {
+                    hotspotOn = true
+                    statusLight.setTextColor(green)
+                    statusText.text = "Conectado"
+                    statusText.setTextColor(green)
+                    button.text = "DESACTIVAR HOTSPOT"
+                    button.setBackgroundColor(red)
+                    button.setTextColor(Color.WHITE)
+                    statusLight.contentDescription = "Hotspot conectado"
+                }
+                "disabled" -> {
+                    hotspotOn = false
+                    statusLight.setTextColor(red)
+                    statusText.text = "Desconectado"
+                    statusText.setTextColor(red)
+                    button.text = "ACTIVAR HOTSPOT"
+                    button.setBackgroundColor(green)
+                    button.setTextColor(Color.BLACK)
+                    statusLight.contentDescription = "Hotspot desconectado"
+                }
+                "unavailable" -> {
+                    statusLight.setTextColor(yellow)
+                    statusText.text = "No se pudo confirmar el estado"
+                    statusText.setTextColor(yellow)
+                    button.text = "REINTENTAR"
+                    button.setBackgroundColor(yellow)
+                    button.setTextColor(Color.BLACK)
+                    statusLight.contentDescription = "Estado del hotspot no confirmado"
+                }
+                else -> {
+                    serverAddress = null
+                    statusLight.setTextColor(red)
+                    statusText.text = "Desconectado de la tablet"
+                    statusText.setTextColor(red)
+                    button.text = "CONECTAR CON LA TABLET"
+                    button.setBackgroundColor(yellow)
+                    button.setTextColor(Color.BLACK)
+                    statusLight.contentDescription = "Sin conexión con la tablet"
+                }
+            }
+        }
     }
 
     private fun discoverAndSend(command: String) {
-        runOnUiThread { setDisconnected() }
+        renderState("connection_lost")
         Thread {
             try {
                 val address = DatagramSocket().use { udp ->
@@ -87,14 +136,14 @@ class MainActivity : Activity() {
                     val buf = ByteArray(128)
                     val packet = DatagramPacket(buf, buf.size)
                     udp.receive(packet)
-                    val response = String(packet.data, packet.offset, packet.length)
-                    if (response != "ARGENTAS_HERE") throw IllegalStateException("Invalid discovery response")
+                    if (String(packet.data, packet.offset, packet.length) != "ARGENTAS_HERE")
+                        throw IllegalStateException("Respuesta de descubrimiento inválida")
                     packet.address.hostAddress
                 }
                 serverAddress = address
                 send(command)
             } catch (_: Exception) {
-                runOnUiThread { setDisconnected() }
+                renderState("connection_lost")
             }
         }.start()
     }
@@ -104,26 +153,23 @@ class MainActivity : Activity() {
         Thread {
             try {
                 Socket(address, 38471).use { socket ->
-                    socket.soTimeout = 4000
+                    socket.soTimeout = 5000
                     PrintWriter(socket.getOutputStream(), true).println("ARGENTAS1|$internalKey|$command")
                     val response = BufferedReader(InputStreamReader(socket.getInputStream(), Charsets.UTF_8))
                         .readLine().orEmpty()
-                    runOnUiThread {
-                        when {
-                            response == "STATUS|true" -> requestedOn = true
-                            response == "STATUS|false" -> requestedOn = false
-                            response == "QUEUED|ON" -> requestedOn = true
-                            response == "QUEUED|OFF" -> requestedOn = false
-                            else -> {
-                                setDisconnected()
-                                return@runOnUiThread
-                            }
-                        }
-                        setConnected()
+                    when {
+                        response == "STATUS|enabled" -> renderState("enabled")
+                        response == "STATUS|disabled" -> renderState("disabled")
+                        response == "STATUS|unavailable" -> renderState("unavailable")
+                        response == "RESULT|enabled" -> renderState("enabled")
+                        response == "RESULT|disabled" -> renderState("disabled")
+                        response.startsWith("ERROR|HOTSPOT_CONTROL_UNAVAILABLE") -> renderState("unavailable")
+                        response.startsWith("ERROR|") -> renderState("unavailable")
+                        else -> renderState("unavailable")
                     }
                 }
             } catch (_: Exception) {
-                runOnUiThread { setDisconnected() }
+                renderState("connection_lost")
             }
         }.start()
     }
