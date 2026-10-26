@@ -101,7 +101,7 @@ class MainActivity : Activity() {
 
     private fun openHotspotSettings() {
         try {
-            val intent = Intent(Settings.ACTION_TETHER_SETTINGS)
+            val intent = Intent("android.settings.TETHER_SETTINGS")
             startActivity(intent)
         } catch (_: Exception) {
             try {
