@@ -91,8 +91,8 @@ class MainActivity : Activity() {
             setPadding(dp(24), dp(28), dp(24), dp(24))
             setBackgroundColor(Color.rgb(18, 19, 21))
             addView(title, LinearLayout.LayoutParams(-1, -2))
-            addView(TextView(this).apply { text = "CONTROL DE INVITADOS"; textSize = 12f; letterSpacing = 0.20f; gravity = Gravity.CENTER; setTextColor(Color.rgb(155, 163, 175)); setPadding(0, dp(5), 0, dp(24)) }, LinearLayout.LayoutParams(-1, -2))
-            val statusPanel = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER; setPadding(dp(18), dp(14), dp(18), dp(18)); background = panel(Color.rgb(30, 32, 37)); addView(light, LinearLayout.LayoutParams(-1, dp(84))); addView(label, LinearLayout.LayoutParams(-1, -2)); addView(detail, LinearLayout.LayoutParams(-1, -2)) }
+            addView(TextView(this@MainActivity).apply { text = "CONTROL DE INVITADOS"; textSize = 12f; letterSpacing = 0.20f; gravity = Gravity.CENTER; setTextColor(Color.rgb(155, 163, 175)); setPadding(0, dp(5), 0, dp(24)) }, LinearLayout.LayoutParams(-1, -2))
+            val statusPanel = LinearLayout(this@MainActivity).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER; setPadding(dp(18), dp(14), dp(18), dp(18)); background = panel(Color.rgb(30, 32, 37)); addView(light, LinearLayout.LayoutParams(-1, dp(84))); addView(label, LinearLayout.LayoutParams(-1, -2)); addView(detail, LinearLayout.LayoutParams(-1, -2)) }
             addView(statusPanel, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(20) })
             addView(settingsButton, LinearLayout.LayoutParams(-1, dp(60)))
         }
