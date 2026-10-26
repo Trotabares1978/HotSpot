@@ -6,6 +6,7 @@ import android.provider.Settings
 import android.widget.Button
 import android.graphics.Color
 import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
 import android.net.wifi.WifiManager
 import android.os.Bundle
 import android.os.Handler
@@ -23,6 +24,8 @@ import java.security.MessageDigest
 
 class MainActivity : Activity() {
     private val internalKey = "argentas-local-control-v1"
+    private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
+    private fun panel(color: Int): GradientDrawable = GradientDrawable().apply { setColor(color); cornerRadius = dp(22).toFloat() }
     private lateinit var light: TextView
     private lateinit var label: TextView
     private lateinit var detail: TextView
@@ -50,42 +53,48 @@ class MainActivity : Activity() {
             setTextColor(Color.rgb(255, 75, 75))
         }
         label = TextView(this).apply {
-            text = "Esperando al celular"
-            textSize = 20f
-            typeface = Typeface.DEFAULT_BOLD
+            text = "CELULAR DESCONECTADO"
+            textSize = 18f
+            typeface = Typeface.create("sans-serif", Typeface.BOLD)
             gravity = Gravity.CENTER
             setTextColor(Color.rgb(255, 197, 48))
             setPadding(0, 8, 0, 0)
         }
         val title = TextView(this).apply {
             text = "ARGENTAS"
-            textSize = 30f
-            typeface = Typeface.DEFAULT_BOLD
+            textSize = 29f
+            letterSpacing = 0.10f
+            typeface = Typeface.create("sans-serif-black", Typeface.BOLD)
             gravity = Gravity.CENTER
             setTextColor(Color.WHITE)
         }
         detail = TextView(this).apply {
-            text = "El estado del hotspot se confirma desde Android."
-            textSize = 15f
+            text = "La tablet está lista para recibir comandos del celular."
+            textSize = 14f
             gravity = Gravity.CENTER
             setTextColor(Color.rgb(170, 177, 187))
             setPadding(12, 18, 12, 24)
         }
         val settingsButton = Button(this).apply {
             text = "ABRIR AJUSTES DEL HOTSPOT"
-            textSize = 15f
+            textSize = 14f
+            isAllCaps = false
+            minHeight = dp(58)
+            setTextColor(Color.WHITE)
+            background = panel(Color.rgb(48, 52, 61))
+            stateListAnimator = null
             setOnClickListener { openHotspotSettings() }
         }
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
-            setPadding(24, 32, 24, 32)
+            setPadding(dp(24), dp(28), dp(24), dp(24))
             setBackgroundColor(Color.rgb(18, 19, 21))
             addView(title, LinearLayout.LayoutParams(-1, -2))
-            addView(light, LinearLayout.LayoutParams(-1, 150))
-            addView(label, LinearLayout.LayoutParams(-1, -2))
-            addView(detail, LinearLayout.LayoutParams(-1, -2))
-            addView(settingsButton, LinearLayout.LayoutParams(-1, 68))
+            addView(TextView(this).apply { text = "CONTROL DE INVITADOS"; textSize = 12f; letterSpacing = 0.20f; gravity = Gravity.CENTER; setTextColor(Color.rgb(155, 163, 175)); setPadding(0, dp(5), 0, dp(24)) }, LinearLayout.LayoutParams(-1, -2))
+            val statusPanel = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER; setPadding(dp(18), dp(14), dp(18), dp(18)); background = panel(Color.rgb(30, 32, 37)); addView(light, LinearLayout.LayoutParams(-1, dp(84))); addView(label, LinearLayout.LayoutParams(-1, -2)); addView(detail, LinearLayout.LayoutParams(-1, -2)) }
+            addView(statusPanel, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(20) })
+            addView(settingsButton, LinearLayout.LayoutParams(-1, dp(60))
         }
         setContentView(root)
         startServer()
