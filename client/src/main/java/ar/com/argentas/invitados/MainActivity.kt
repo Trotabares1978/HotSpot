@@ -115,12 +115,21 @@ class MainActivity : Activity() {
                 }
                 "unavailable" -> {
                     statusLight.setTextColor(yellow)
-                    statusText.text = "No se pudo confirmar el estado"
+                    statusText.text = "Estado del hotspot sin confirmar"
                     statusText.setTextColor(yellow)
                     button.text = if (hotspotOn) "DESACTIVAR HOTSPOT" else "ACTIVAR HOTSPOT"
                     button.setBackgroundColor(yellow)
                     button.setTextColor(Color.BLACK)
                     statusLight.contentDescription = "Estado del hotspot no confirmado"
+                }
+                "settings" -> {
+                    statusLight.setTextColor(yellow)
+                    statusText.text = "Confirmá el hotspot en la tablet"
+                    statusText.setTextColor(yellow)
+                    button.text = "VOLVER A COMPROBAR"
+                    button.setBackgroundColor(yellow)
+                    button.setTextColor(Color.BLACK)
+                    statusLight.contentDescription = "Requiere confirmación en la tablet"
                 }
                 else -> {
                     serverAddress = null
@@ -175,6 +184,7 @@ class MainActivity : Activity() {
                         response == "STATUS|unavailable" -> renderState("unavailable")
                         response == "RESULT|enabled" -> renderState("enabled")
                         response == "RESULT|disabled" -> renderState("disabled")
+                        response.startsWith("OPEN_SETTINGS|") -> renderState("settings")
                         response.startsWith("ERROR|HOTSPOT_CONTROL_UNAVAILABLE") -> renderState("unavailable")
                         response.startsWith("ERROR|") -> renderState("unavailable")
                         else -> renderState("unavailable")
