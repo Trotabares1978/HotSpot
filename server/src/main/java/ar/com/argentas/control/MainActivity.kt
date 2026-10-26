@@ -14,7 +14,7 @@ import java.net.ServerSocket
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.io.PrintWriter
-import java.security.MessageDigest
+import java.security.MessageDigest\nimport android.os.Handler\nimport android.os.Looper
 
 class MainActivity : Activity() {
     private val dark=Color.rgb(18,19,21)
@@ -26,7 +26,7 @@ class MainActivity : Activity() {
     @Volatile private var requested="unknown"
     private var server: ServerSocket?=null
     private var discovery: DatagramSocket?=null
-    @Volatile private var offAt=0L
+    @Volatile private var offAt=0L\n    private val handler=Handler(Looper.getMainLooper())\n    private val timer=object: Runnable { override fun run() { if (offAt > 0L && System.currentTimeMillis() >= offAt) { requested="false"; offAt=0L }; if (running) handler.postDelayed(this,1000) } }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -82,7 +82,7 @@ class MainActivity : Activity() {
                 val tcp=ServerSocket(38471)
                 server=tcp
                 running=true
-                Thread { discoverLoop() }.start()
+                Thread { discoverLoop() }.start()\n                handler.post(timer)
                 runOnUiThread { status.text="● Servidor activo"; status.setTextColor(Color.rgb(70,210,125)); start.text="DETENER SERVIDOR" }
                 while(running) {
                     val client=tcp.accept()
