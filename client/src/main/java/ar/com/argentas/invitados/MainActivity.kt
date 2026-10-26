@@ -32,26 +32,34 @@ class MainActivity : Activity() {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
-            setPadding(28, 28, 28, 28)
+            setPadding(24, 36, 24, 36)
             setBackgroundColor(bg)
         }
         val title = TextView(this).apply {
-            text = "ARGENTAS · INVITADOS"
-            textSize = 20f
+            text = "ARGENTAS"
+            textSize = 30f
             gravity = Gravity.CENTER
             setTextColor(Color.WHITE)
-            setPadding(0, 0, 0, 28)
+            setPadding(0, 0, 0, 8)
+        }
+        val subtitle = TextView(this).apply {
+            text = "CONTROL DEL HOTSPOT"
+            textSize = 13f
+            letterSpacing = 0.18f
+            gravity = Gravity.CENTER
+            setTextColor(Color.rgb(170, 177, 187))
+            setPadding(0, 0, 0, 36)
         }
         statusLight = TextView(this).apply {
             text = "●"
-            textSize = 64f
+            textSize = 76f
             gravity = Gravity.CENTER
             setTextColor(red)
             contentDescription = "Estado del hotspot desconocido"
         }
         statusText = TextView(this).apply {
             text = "Desconectado"
-            textSize = 22f
+            textSize = 23f
             gravity = Gravity.CENTER
             setTextColor(red)
             setPadding(0, 4, 0, 28)
@@ -71,9 +79,12 @@ class MainActivity : Activity() {
             }
         }
         root.addView(title, LinearLayout.LayoutParams(-1, -2))
-        root.addView(statusLight, LinearLayout.LayoutParams(-1, 100))
+        root.addView(subtitle, LinearLayout.LayoutParams(-1, -2))
+        root.addView(statusLight, LinearLayout.LayoutParams(-1, 110))
         root.addView(statusText, LinearLayout.LayoutParams(-1, -2))
-        root.addView(button, LinearLayout.LayoutParams(-1, 84))
+        val buttonParams = LinearLayout.LayoutParams(-1, 76)
+        buttonParams.topMargin = 16
+        root.addView(button, buttonParams)
         setContentView(root)
         discoverAndSend("STATUS")
     }
@@ -106,7 +117,7 @@ class MainActivity : Activity() {
                     statusLight.setTextColor(yellow)
                     statusText.text = "No se pudo confirmar el estado"
                     statusText.setTextColor(yellow)
-                    button.text = "REINTENTAR"
+                    button.text = if (hotspotOn) "DESACTIVAR HOTSPOT" else "ACTIVAR HOTSPOT"
                     button.setBackgroundColor(yellow)
                     button.setTextColor(Color.BLACK)
                     statusLight.contentDescription = "Estado del hotspot no confirmado"
@@ -116,8 +127,8 @@ class MainActivity : Activity() {
                     statusLight.setTextColor(red)
                     statusText.text = "Desconectado de la tablet"
                     statusText.setTextColor(red)
-                    button.text = "CONECTAR CON LA TABLET"
-                    button.setBackgroundColor(yellow)
+                    button.text = if (hotspotOn) "DESACTIVAR HOTSPOT" else "ACTIVAR HOTSPOT"
+                    button.setBackgroundColor(green)
                     button.setTextColor(Color.BLACK)
                     statusLight.contentDescription = "Sin conexión con la tablet"
                 }
