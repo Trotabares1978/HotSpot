@@ -6,6 +6,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.view.Gravity
+import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.EditText
@@ -16,54 +17,66 @@ import java.io.InputStreamReader
 import java.io.PrintWriter
 import java.net.ServerSocket
 import java.net.Socket
-import java.net.SocketTimeoutException
+import java.security.MessageDigest
 import java.util.concurrent.Executors
 
 /**
- * Initial prototype for ARGENTAS - Invitados.
- * The LAN protocol and UI are real; hotspot switching remains behind HotspotController
- * until it is validated against the exact Redmi Pad Android/HyperOS version.
+ * ARGENTAS - Invitados: first development build.
+ *
+ * One APK can be used in either role:
+ * - Tablet: start the local command server.
+ * - Phone: enter the tablet IP and shared access PIN.
+ *
+ * IMPORTANT: HotspotController is intentionally not marked as successful until
+ * its implementation is validated on the target Redmi Pad. Standard Android
+ * apps cannot reliably toggle tethering on every Android/HyperOS version.
  */
 class MainActivity : Activity() {
     private val executor = Executors.newCachedThreadPool()
-    private val mainHandler = Handler(Looper.getMainLooper())
+    private val handler = Handler(Looper.getMainLooper())
     private var serverSocket: ServerSocket? = null
-    private var serverRunning = false
+    @Volatile private var serverRunning = false
     private var serverMode = false
-    private var hotspotEnabled = false
-    private var clientConnected = false
-    private var timeoutAt = 0L
+    private var lastRequestedState: Boolean? = null
+    private var connected = false
+    private var countdownAt = 0L
 
     private lateinit var status: TextView
-    private lateinit var stateLabel: TextView
-    private lateinit var addressInput: EditText
-    private lateinit var actionButton: Button
-    private lateinit var roleButton: Button
-    private val timeoutTick = object : Runnable {
+    private lateinit var state: TextView
+    private lateinit var hostInput: EditText
+    private lateinit var pinInput: EditText
+    private lateinit var toggleButton: Button
+    private lateinit var serverButton: Button
+
+    private val countdown = object : Runnable {
         override fun run() {
-            if (hotspotEnabled && timeoutAt > 0L) {
-                val remaining = timeoutAt - System.currentTimeMillis()
-                if (remaining <= 0L) {
-                    setHotspot(false, null)
-                } else {
-                    stateLabel.text = "Hotspot solicitado: apagado automático en ${remaining / 1000}s"
-                    mainHandler.postDelayed(this, 1000)
-                }
+            val deadline = countdownAt
+            if (deadline == 0L) return
+            val left = deadline - System.currentTimeMillis()
+            if (left <= 0L) {
+                // Safety behavior: request OFF locally. Actual radio control depends on
+                // the validated platform adapter; never pretend it succeeded.
+                if (serverMode) requestHotspot(false)
+                countdownAt = 0L
+                state.text = "Se cumplieron los 10 minutos. Orden de apagado emitida; verificá el estado real."
+            } else {
+                state.text = "Apagado automático solicitado en ${left / 1000}s"
+                handler.postDelayed(this, 1000)
             }
         }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        buildUi()
-        updateUi()
+        createUi()
+        render()
     }
 
-    private fun buildUi() {
+    private fun createUi() {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_HORIZONTAL
-            setPadding(28, 36, 28, 28)
+            setPadding(26, 34, 26, 24)
             setBackgroundColor(Color.rgb(18, 18, 18))
         }
         val title = TextView(this).apply {
@@ -75,44 +88,52 @@ class MainActivity : Activity() {
         status = TextView(this).apply {
             textSize = 16f
             gravity = Gravity.CENTER
-            setPadding(8, 28, 8, 20)
+            setPadding(8, 24, 8, 18)
         }
-        stateLabel = TextView(this).apply {
+        state = TextView(this).apply {
             textSize = 14f
             gravity = Gravity.CENTER
             setTextColor(Color.LTGRAY)
-            setPadding(8, 8, 8, 24)
+            setPadding(8, 8, 8, 18)
         }
-        addressInput = EditText(this).apply {
-            hint = "IP de la tablet (ej. 192.168.1.20)"
+        hostInput = EditText(this).apply {
+            hint = "IP local de la tablet"
             setSingleLine(true)
             setTextColor(Color.WHITE)
             setHintTextColor(Color.GRAY)
         }
-        actionButton = Button(this).apply {
+        pinInput = EditText(this).apply {
+            hint = "PIN compartido"
+            setSingleLine(true)
+            inputType = 129
+            setTextColor(Color.WHITE)
+            setHintTextColor(Color.GRAY)
+        }
+        toggleButton = Button(this).apply {
             textSize = 18f
             setOnClickListener {
                 if (serverMode) {
-                    setHotspot(!hotspotEnabled, null)
+                    val next = lastRequestedState != true
+                    requestHotspot(next)
                 } else {
-                    sendCommand(if (hotspotEnabled) "OFF" else "ON")
+                    sendCommand(if (lastRequestedState == true) "OFF" else "ON")
                 }
             }
         }
-        roleButton = Button(this).apply {
-            text = "Configurar como servidor (tablet)"
+        serverButton = Button(this).apply {
+            text = "Iniciar servidor en esta tablet"
             setOnClickListener {
-                if (!serverMode) startServer() else stopServer()
+                if (serverRunning) stopServer() else startServer()
             }
         }
-        val help = TextView(this).apply {
-            text = "Prototipo inicial. El control real del hotspot se habilitará tras probar qué permite Android/HyperOS en la tablet."
+        val note = TextView(this).apply {
+            text = "Versión de desarrollo. El control real del hotspot se habilitará después de probar la Redmi Pad. No se debe considerar confirmado el estado del Wi-Fi solo por enviar una orden."
             textSize = 12f
             gravity = Gravity.CENTER
             setTextColor(Color.LTGRAY)
             setPadding(8, 20, 8, 8)
         }
-        listOf(title, status, stateLabel, addressInput, actionButton, roleButton, help).forEach {
+        listOf(title, status, state, hostInput, pinInput, toggleButton, serverButton, note).forEach {
             root.addView(it, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         }
         setContentView(root)
@@ -126,16 +147,18 @@ class MainActivity : Activity() {
                 serverSocket = socket
                 serverRunning = true
                 serverMode = true
-                mainHandler.post { updateUi() }
+                handler.post { render() }
                 while (serverRunning) {
                     val client = socket.accept()
                     executor.execute { handleClient(client) }
                 }
             } catch (_: Exception) {
-                mainHandler.post {
+                if (serverRunning) handler.post {
                     status.text = "No se pudo iniciar el servidor"
                     status.setTextColor(Color.RED)
                 }
+            } finally {
+                serverRunning = false
             }
         }
     }
@@ -145,105 +168,126 @@ class MainActivity : Activity() {
         serverMode = false
         try { serverSocket?.close() } catch (_: Exception) {}
         serverSocket = null
-        updateUi()
+        render()
     }
 
     private fun handleClient(socket: Socket) {
         socket.use { s ->
             s.soTimeout = 4000
-            val reader = BufferedReader(InputStreamReader(s.getInputStream()))
+            val reader = BufferedReader(InputStreamReader(s.getInputStream(), Charsets.UTF_8))
             val writer = PrintWriter(s.getOutputStream(), true)
-            val command = reader.readLine()?.trim().orEmpty()
-            val response = when (command) {
-                "STATUS" -> "STATUS|$hotspotEnabled"
+            val line = reader.readLine().orEmpty()
+            val parts = line.split("|", limit = 3)
+            if (parts.size != 3 || parts[0] != "ARGENTAS1") {
+                writer.println("ERROR|BAD_REQUEST")
+                return
+            }
+            val suppliedPin = parts[1]
+            if (!constantTimeEquals(suppliedPin, pinInput.text.toString())) {
+                writer.println("ERROR|AUTH")
+                return
+            }
+            val command = parts[2]
+            when (command) {
+                "STATUS" -> writer.println("STATUS|${lastRequestedState?.toString() ?: "unknown"}")
                 "ON" -> {
-                    mainHandler.post { setHotspot(true, null) }
-                    "QUEUED|ON"
+                    handler.post { requestHotspot(true) }
+                    writer.println("QUEUED|ON")
                 }
                 "OFF" -> {
-                    mainHandler.post { setHotspot(false, null) }
-                    "QUEUED|OFF"
+                    handler.post { requestHotspot(false) }
+                    writer.println("QUEUED|OFF")
                 }
-                else -> "ERROR|UNKNOWN_COMMAND"
+                else -> writer.println("ERROR|UNKNOWN_COMMAND")
             }
-            writer.println(response)
         }
     }
 
+    private fun constantTimeEquals(a: String, b: String): Boolean {
+        return MessageDigest.isEqual(a.toByteArray(Charsets.UTF_8), b.toByteArray(Charsets.UTF_8))
+    }
+
     private fun sendCommand(command: String) {
-        val host = addressInput.text.toString().trim()
-        if (host.isBlank()) {
-            status.text = "Ingresá la IP local de la tablet"
+        val host = hostInput.text.toString().trim()
+        val pin = pinInput.text.toString()
+        if (host.isBlank() || pin.length < 6) {
+            status.text = "Ingresá la IP de la tablet y un PIN de al menos 6 caracteres"
             status.setTextColor(Color.YELLOW)
             return
         }
-        status.text = "Conectando con la tablet…"
+        status.text = "Conectando…"
         executor.execute {
             try {
                 Socket(host, 38471).use { socket ->
                     socket.soTimeout = 4000
-                    PrintWriter(socket.getOutputStream(), true).println(command)
-                    val response = BufferedReader(InputStreamReader(socket.getInputStream())).readLine().orEmpty()
-                    mainHandler.post {
-                        clientConnected = true
-                        status.text = "Tablet conectada"
-                        status.setTextColor(Color.GREEN)
-                        if (response.startsWith("STATUS|")) {
-                            hotspotEnabled = response.endsWith("true")
-                            updateUi()
-                        } else {
-                            stateLabel.text = "Orden enviada. El control del hotspot debe validarse en la tablet."
+                    PrintWriter(socket.getOutputStream(), true).println("ARGENTAS1|$pin|$command")
+                    val response = BufferedReader(InputStreamReader(socket.getInputStream(), Charsets.UTF_8)).readLine().orEmpty()
+                    handler.post {
+                        connected = !response.startsWith("ERROR")
+                        status.text = when {
+                            response.startsWith("ERROR|AUTH") -> "PIN incorrecto"
+                            response.startsWith("ERROR") -> "Orden rechazada"
+                            else -> "Conexión con la tablet: activa"
                         }
+                        status.setTextColor(if (connected) Color.GREEN else Color.RED)
+                        if (response.startsWith("STATUS|")) {
+                            lastRequestedState = when (response.substringAfter("|")) {
+                                "true" -> true
+                                "false" -> false
+                                else -> null
+                            }
+                        } else if (response.startsWith("QUEUED|")) {
+                            state.text = "Orden recibida por el servidor. Falta confirmar el estado real del hotspot."
+                        }
+                        render()
                     }
                 }
             } catch (_: Exception) {
-                mainHandler.post {
-                    clientConnected = false
+                handler.post {
+                    connected = false
                     status.text = "Sin conexión con la tablet"
                     status.setTextColor(Color.RED)
+                    render()
                 }
             }
         }
     }
 
-    private fun setHotspot(enabled: Boolean, unused: Any?) {
-        // Placeholder adapter: Android restricts third-party tethering control on many versions.
-        // Do not report success until a supported implementation is verified on the target tablet.
-        hotspotEnabled = enabled
+    private fun requestHotspot(enabled: Boolean) {
+        // TODO: implement the platform-specific hotspot adapter after testing the Redmi Pad.
+        // Keep the actual state unknown; only the requested state is recorded.
+        lastRequestedState = enabled
         if (enabled) {
-            timeoutAt = System.currentTimeMillis() + 10 * 60 * 1000L
-            mainHandler.removeCallbacks(timeoutTick)
-            mainHandler.post(timeoutTick)
+            countdownAt = System.currentTimeMillis() + 10 * 60 * 1000L
+            handler.removeCallbacks(countdown)
+            handler.post(countdown)
+            state.text = "Encendido solicitado. Control real pendiente de validar."
         } else {
-            timeoutAt = 0L
-            mainHandler.removeCallbacks(timeoutTick)
+            countdownAt = 0L
+            handler.removeCallbacks(countdown)
+            state.text = "Apagado solicitado. Control real pendiente de validar."
         }
-        stateLabel.text = if (enabled) {
-            "Orden de encendido registrada; control real pendiente de validar"
-        } else {
-            "Orden de apagado registrada; control real pendiente de validar"
-        }
-        updateUi()
+        render()
     }
 
-    private fun updateUi() {
+    private fun render() {
         if (!::status.isInitialized) return
-        status.text = when {
-            serverMode && serverRunning -> "Servidor activo · puerto 38471"
-            clientConnected -> "Conectado a la tablet"
-            else -> "Cliente listo · falta conectar"
+        if (serverRunning && serverMode) {
+            status.text = "● Servidor activo · puerto 38471"
+            status.setTextColor(Color.GREEN)
+        } else if (!connected) {
+            status.text = "● Sin conexión con la tablet"
+            status.setTextColor(Color.RED)
         }
-        status.setTextColor(if (serverMode && serverRunning || clientConnected) Color.GREEN else Color.RED)
-        actionButton.text = if (hotspotEnabled) "DESACTIVAR" else "ACTIVAR"
-        roleButton.text = if (serverMode) "Detener servidor" else "Configurar como servidor (tablet)"
-        addressInput.visibility = if (serverMode) android.view.View.GONE else android.view.View.VISIBLE
-        stateLabel.text = if (hotspotEnabled) "Hotspot solicitado: ENCENDIDO" else "Hotspot solicitado: APAGADO"
+        toggleButton.text = if (lastRequestedState == true) "DESACTIVAR" else "ACTIVAR"
+        serverButton.text = if (serverRunning) "Detener servidor" else "Iniciar servidor en esta tablet"
+        hostInput.visibility = if (serverMode) View.GONE else View.VISIBLE
     }
 
     override fun onDestroy() {
         stopServer()
         executor.shutdownNow()
-        mainHandler.removeCallbacks(timeoutTick)
+        handler.removeCallbacks(countdown)
         super.onDestroy()
     }
 }
