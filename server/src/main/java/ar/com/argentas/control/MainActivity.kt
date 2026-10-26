@@ -2,12 +2,8 @@ package ar.com.argentas.control
 
 import android.app.Activity
 import android.graphics.Color
-import android.graphics.Typeface
 import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
 import android.view.Gravity
-import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
 import java.io.BufferedReader
@@ -19,79 +15,29 @@ import java.net.ServerSocket
 import java.security.MessageDigest
 
 class MainActivity : Activity() {
-    private val dark = Color.rgb(18, 19, 21)
-    private val yellow = Color.rgb(255, 197, 48)
     private val internalKey = "argentas-local-control-v1"
-    private lateinit var status: TextView
-    private lateinit var start: Button
+    private lateinit var light: TextView
     @Volatile private var running = false
     @Volatile private var requested = "unknown"
     private var server: ServerSocket? = null
     private var discovery: DatagramSocket? = null
-    @Volatile private var offAt = 0L
-    private val handler = Handler(Looper.getMainLooper())
-    private val timer = object : Runnable {
-        override fun run() {
-            if (offAt > 0L && System.currentTimeMillis() >= offAt) {
-                requested = "false"
-                offAt = 0L
-                runOnUiThread {
-                    if (::status.isInitialized) status.text = "● Solicitud apagada por temporizador"
-                }
-            }
-            if (running) handler.postDelayed(this, 1000)
-        }
-    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        light = TextView(this).apply {
+            text = "●"
+            textSize = 88f
+            gravity = Gravity.CENTER
+            setTextColor(Color.rgb(255, 75, 75))
+        }
         val root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
-            setPadding(24, 30, 24, 24)
-            setBackgroundColor(dark)
-        }
-        root.addView(TextView(this).apply {
-            text = "ARGENTAS"
-            textSize = 28f
-            letterSpacing = .12f
-            typeface = Typeface.DEFAULT_BOLD
-            setTextColor(yellow)
-            gravity = Gravity.CENTER
-        }, lp())
-        root.addView(TextView(this).apply {
-            text = "PANEL DE CONTROL · TABLET"
-            textSize = 12f
-            setTextColor(Color.LTGRAY)
-            gravity = Gravity.CENTER
-        }, lp())
-        status = TextView(this).apply {
-            text = "● Servidor detenido"
-            textSize = 16f
-            setTextColor(Color.rgb(255, 95, 95))
-            gravity = Gravity.CENTER
-            setPadding(0, 28, 0, 20)
-        }
-        start = Button(this).apply {
-            text = "INICIAR SERVIDOR"
-            setTextColor(Color.BLACK)
-            setBackgroundColor(yellow)
-            setOnClickListener { if (running) stopServer() else startServer() }
-        }
-        val note = TextView(this).apply {
-            text = "Iniciá el servidor. Cliente encontrará esta tablet automáticamente en la misma red. El control real del hotspot todavía no está implementado."
-            textSize = 13f
-            setTextColor(Color.LTGRAY)
-            gravity = Gravity.CENTER
-            setPadding(8, 24, 8, 0)
-        }
-        listOf(status, start, note).forEach {
-            root.addView(it, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = 10 })
+            setBackgroundColor(Color.rgb(18, 19, 21))
+            addView(light, LinearLayout.LayoutParams(-1, -1))
         }
         setContentView(root)
+        startServer()
     }
-
-    private fun lp() = LinearLayout.LayoutParams(-1, -2)
 
     private fun startServer() {
         if (running) return
@@ -100,21 +46,15 @@ class MainActivity : Activity() {
                 val tcp = ServerSocket(38471)
                 server = tcp
                 running = true
+                runOnUiThread { light.setTextColor(Color.rgb(70, 210, 125)) }
                 Thread { discoverLoop() }.start()
-                handler.post(timer)
-                runOnUiThread {
-                    status.text = "● Servidor activo"
-                    status.setTextColor(Color.rgb(70, 210, 125))
-                    start.text = "DETENER SERVIDOR"
-                }
                 while (running) {
                     val client = tcp.accept()
                     Thread { handle(client) }.start()
                 }
             } catch (_: Exception) {
-                if (running) runOnUiThread { status.text = "No se pudo iniciar el servidor" }
-            } finally {
                 running = false
+                runOnUiThread { light.setTextColor(Color.rgb(255, 75, 75)) }
             }
         }.start()
     }
@@ -157,12 +97,10 @@ class MainActivity : Activity() {
                     "STATUS" -> writer.println("STATUS|$requested")
                     "ON" -> {
                         requested = "true"
-                        offAt = System.currentTimeMillis() + 600000L
                         writer.println("QUEUED|ON")
                     }
                     "OFF" -> {
                         requested = "false"
-                        offAt = 0L
                         writer.println("QUEUED|OFF")
                     }
                     else -> writer.println("ERROR|UNKNOWN_COMMAND")
@@ -172,20 +110,10 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun stopServer() {
+    override fun onDestroy() {
         running = false
-        handler.removeCallbacks(timer)
         try { server?.close() } catch (_: Exception) {}
         try { discovery?.close() } catch (_: Exception) {}
-        server = null
-        discovery = null
-        status.text = "● Servidor detenido"
-        status.setTextColor(Color.rgb(255, 95, 95))
-        start.text = "INICIAR SERVIDOR"
-    }
-
-    override fun onDestroy() {
-        stopServer()
         super.onDestroy()
     }
 }
