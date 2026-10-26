@@ -4,6 +4,8 @@ import android.app.Activity
 import android.graphics.Color
 import android.graphics.Typeface
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.Gravity
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -21,8 +23,18 @@ class MainActivity : Activity() {
     private lateinit var label: TextView
     @Volatile private var running = false
     @Volatile private var requested = "unknown"
+    @Volatile private var lastClientContact = 0L
     private var server: ServerSocket? = null
     private var discovery: DatagramSocket? = null
+    private val handler = Handler(Looper.getMainLooper())
+    private val connectionMonitor = object : Runnable {
+        override fun run() {
+            val connected = running && lastClientContact > 0L &&
+                System.currentTimeMillis() - lastClientContact < 15000L
+            showConnection(connected)
+            if (running) handler.postDelayed(this, 1000L)
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -52,7 +64,7 @@ class MainActivity : Activity() {
         startServer()
     }
 
-    private fun setConnection(connected: Boolean) {
+    private fun showConnection(connected: Boolean) {
         runOnUiThread {
             light.setTextColor(if (connected) Color.rgb(70, 210, 125) else Color.rgb(255, 75, 75))
             label.text = if (connected) "Conectado" else "Desconectado"
@@ -62,13 +74,14 @@ class MainActivity : Activity() {
 
     private fun startServer() {
         if (running) return
-        setConnection(false)
+        showConnection(false)
         Thread {
             try {
                 val tcp = ServerSocket(38471)
                 server = tcp
                 running = true
-                setConnection(false)
+                lastClientContact = 0L
+                handler.post(connectionMonitor)
                 Thread { discoverLoop() }.start()
                 while (running) {
                     val client = tcp.accept()
@@ -76,7 +89,8 @@ class MainActivity : Activity() {
                 }
             } catch (_: Exception) {
                 running = false
-                setConnection(false)
+                handler.removeCallbacks(connectionMonitor)
+                showConnection(false)
             }
         }.start()
     }
@@ -91,6 +105,7 @@ class MainActivity : Activity() {
                     udp.receive(packet)
                     val msg = String(packet.data, packet.offset, packet.length)
                     if (msg == "ARGENTAS_DISCOVER") {
+                        lastClientContact = System.currentTimeMillis()
                         val data = "ARGENTAS_HERE".toByteArray()
                         udp.send(DatagramPacket(data, data.size, packet.address, packet.port))
                     }
@@ -115,20 +130,16 @@ class MainActivity : Activity() {
                     writer.println("ERROR|AUTH")
                     return
                 }
+                lastClientContact = System.currentTimeMillis()
                 when (parts[2]) {
-                    "STATUS" -> {
-                        writer.println("STATUS|$requested")
-                        setConnection(true)
-                    }
+                    "STATUS" -> writer.println("STATUS|$requested")
                     "ON" -> {
                         requested = "true"
                         writer.println("QUEUED|ON")
-                        setConnection(true)
                     }
                     "OFF" -> {
                         requested = "false"
                         writer.println("QUEUED|OFF")
-                        setConnection(true)
                     }
                     else -> writer.println("ERROR|UNKNOWN_COMMAND")
                 }
@@ -139,6 +150,7 @@ class MainActivity : Activity() {
 
     override fun onDestroy() {
         running = false
+        handler.removeCallbacks(connectionMonitor)
         try { server?.close() } catch (_: Exception) {}
         try { discovery?.close() } catch (_: Exception) {}
         super.onDestroy()
