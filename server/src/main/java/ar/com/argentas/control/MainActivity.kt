@@ -1,6 +1,9 @@
 package ar.com.argentas.control
 
 import android.app.Activity
+import android.content.Intent
+import android.provider.Settings
+import android.widget.Button
 import android.graphics.Color
 import android.graphics.Typeface
 import android.net.wifi.WifiManager
@@ -22,6 +25,7 @@ class MainActivity : Activity() {
     private val internalKey = "argentas-local-control-v1"
     private lateinit var light: TextView
     private lateinit var label: TextView
+    private lateinit var detail: TextView
     @Volatile private var running = false
     @Volatile private var lastClientContact = 0L
     private var server: ServerSocket? = null
@@ -53,13 +57,35 @@ class MainActivity : Activity() {
             setTextColor(Color.rgb(255, 197, 48))
             setPadding(0, 8, 0, 0)
         }
+        val title = TextView(this).apply {
+            text = "ARGENTAS"
+            textSize = 30f
+            typeface = Typeface.DEFAULT_BOLD
+            gravity = Gravity.CENTER
+            setTextColor(Color.WHITE)
+        }
+        detail = TextView(this).apply {
+            text = "El estado del hotspot se confirma desde Android."
+            textSize = 15f
+            gravity = Gravity.CENTER
+            setTextColor(Color.rgb(170, 177, 187))
+            setPadding(12, 18, 12, 24)
+        }
+        val settingsButton = Button(this).apply {
+            text = "ABRIR AJUSTES DEL HOTSPOT"
+            textSize = 15f
+            setOnClickListener { openHotspotSettings() }
+        }
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
-            setPadding(24, 24, 24, 24)
+            setPadding(24, 32, 24, 32)
             setBackgroundColor(Color.rgb(18, 19, 21))
-            addView(light, LinearLayout.LayoutParams(-1, 180))
+            addView(title, LinearLayout.LayoutParams(-1, -2))
+            addView(light, LinearLayout.LayoutParams(-1, 150))
             addView(label, LinearLayout.LayoutParams(-1, -2))
+            addView(detail, LinearLayout.LayoutParams(-1, -2))
+            addView(settingsButton, LinearLayout.LayoutParams(-1, 68))
         }
         setContentView(root)
         startServer()
@@ -70,6 +96,21 @@ class MainActivity : Activity() {
             light.setTextColor(if (connected) Color.rgb(70, 210, 125) else Color.rgb(255, 75, 75))
             label.text = if (connected) "Celular conectado · control remoto" else "Celular desconectado"
             label.setTextColor(if (connected) Color.rgb(70, 210, 125) else Color.rgb(255, 95, 95))
+        }
+    }
+
+    private fun openHotspotSettings() {
+        try {
+            val intent = Intent(Settings.ACTION_TETHER_SETTINGS)
+            startActivity(intent)
+        } catch (_: Exception) {
+            try {
+                startActivity(Intent(Settings.ACTION_WIRELESS_SETTINGS))
+            } catch (_: Exception) {
+                runOnUiThread {
+                    detail.text = "Abrí Ajustes de Android > Punto de acceso portátil manualmente."
+                }
+            }
         }
     }
 
@@ -169,12 +210,18 @@ class MainActivity : Activity() {
                     "ON" -> {
                         val state = setHotspotEnabled(true)
                         if (state == "enabled") writer.println("RESULT|enabled")
-                        else writer.println("ERROR|HOTSPOT_CONTROL_UNAVAILABLE")
+                        else {
+                            runOnUiThread { openHotspotSettings() }
+                            writer.println("OPEN_SETTINGS|enable")
+                        }
                     }
                     "OFF" -> {
                         val state = setHotspotEnabled(false)
                         if (state == "disabled") writer.println("RESULT|disabled")
-                        else writer.println("ERROR|HOTSPOT_CONTROL_UNAVAILABLE")
+                        else {
+                            runOnUiThread { openHotspotSettings() }
+                            writer.println("OPEN_SETTINGS|disable")
+                        }
                     }
                     else -> writer.println("ERROR|UNKNOWN_COMMAND")
                 }
