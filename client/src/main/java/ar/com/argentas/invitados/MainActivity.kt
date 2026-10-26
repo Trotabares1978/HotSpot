@@ -2,7 +2,6 @@ package ar.com.argentas.invitados
 
 import android.app.Activity
 import android.graphics.Color
-import android.graphics.Typeface
 import android.os.Bundle
 import android.view.Gravity
 import android.widget.Button
@@ -17,142 +16,114 @@ import java.net.InetAddress
 import java.net.Socket
 
 class MainActivity : Activity() {
-    private val bg = Color.rgb(16,17,19)
-    private val panel = Color.rgb(31,32,35)
-    private val yellow = Color.rgb(255,197,48)
-    private val red = Color.rgb(226,38,45)
+    private val bg = Color.rgb(18, 19, 21)
+    private val yellow = Color.rgb(255, 197, 48)
+    private val red = Color.rgb(226, 38, 45)
+    private val green = Color.rgb(55, 205, 105)
     private val internalKey = "argentas-local-control-v1"
-    private var serverAddress: String? = null
-    private var requestedOn = false
-    private lateinit var status: TextView
+    @Volatile private var serverAddress: String? = null
+    @Volatile private var requestedOn = false
+    private lateinit var statusLight: TextView
     private lateinit var button: Button
-    private lateinit var hint: TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
-            setPadding(26,30,26,24)
+            setPadding(28, 28, 28, 28)
             setBackgroundColor(bg)
         }
-        root.addView(TextView(this).apply {
-            text = "ARGENTAS"
-            textSize = 29f
-            letterSpacing = .12f
-            typeface = Typeface.create("sans-serif-black", Typeface.BOLD)
-            setTextColor(yellow)
+        statusLight = TextView(this).apply {
+            text = "●"
+            textSize = 48f
             gravity = Gravity.CENTER
-        }, lp())
-        root.addView(TextView(this).apply {
-            text = "WI-FI PARA INVITADOS"
-            textSize = 12f
-            letterSpacing = .18f
-            setTextColor(Color.LTGRAY)
-            gravity = Gravity.CENTER
-        }, lp())
-        val card = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER
-            setPadding(20,24,20,24)
-            setBackgroundColor(panel)
-        }
-        status = TextView(this).apply {
-            text = "● Buscando la tablet…"
-            textSize = 15f
-            gravity = Gravity.CENTER
-            setTextColor(yellow)
-            setPadding(0,0,0,22)
+            setTextColor(red)
+            setPadding(0, 0, 0, 28)
+            contentDescription = "Sin conexión con la tablet"
         }
         button = Button(this).apply {
-            text = "CONECTAR"
+            text = "ACTIVAR HOTSPOT"
             textSize = 17f
+            isAllCaps = false
             setTextColor(Color.BLACK)
             setBackgroundColor(yellow)
-            setOnClickListener { if (serverAddress == null) discoverAndSend("STATUS") else send(if (requestedOn) "OFF" else "ON") }
+            setOnClickListener {
+                val address = serverAddress
+                if (address == null) discoverAndSend("STATUS")
+                else send(if (requestedOn) "OFF" else "ON")
+            }
         }
-        hint = TextView(this).apply {
-            text = "Un solo botón. Sin configurar IP ni códigos."
-            textSize = 13f
-            gravity = Gravity.CENTER
-            setTextColor(Color.LTGRAY)
-            setPadding(8,18,8,0)
-        }
-        listOf(status,button,hint).forEach { card.addView(it, LinearLayout.LayoutParams(-1,-2).apply { bottomMargin=10 }) }
-        root.addView(card, LinearLayout.LayoutParams(-1,-2).apply { topMargin=30 })
-        root.addView(TextView(this).apply {
-            text = "ARGENTAS  •  PUNTA LARA"
-            textSize = 11f
-            letterSpacing = .12f
-            gravity = Gravity.CENTER
-            setTextColor(Color.GRAY)
-            setPadding(0,24,0,0)
-        }, lp())
+        root.addView(statusLight, LinearLayout.LayoutParams(-1, -2))
+        root.addView(button, LinearLayout.LayoutParams(-1, -2))
         setContentView(root)
         discoverAndSend("STATUS")
     }
 
-    private fun lp() = LinearLayout.LayoutParams(-1,-2)
+    private fun setDisconnected() {
+        statusLight.setTextColor(red)
+        statusLight.contentDescription = "Sin conexión con la tablet"
+        serverAddress = null
+        button.text = if (requestedOn) "DESACTIVAR HOTSPOT" else "ACTIVAR HOTSPOT"
+    }
+
+    private fun setConnected() {
+        statusLight.setTextColor(green)
+        statusLight.contentDescription = "Conectado a la tablet"
+        button.text = if (requestedOn) "DESACTIVAR HOTSPOT" else "ACTIVAR HOTSPOT"
+        button.setBackgroundColor(if (requestedOn) red else yellow)
+        button.setTextColor(if (requestedOn) Color.WHITE else Color.BLACK)
+    }
 
     private fun discoverAndSend(command: String) {
-        runOnUiThread { status.text="● Buscando la tablet…"; status.setTextColor(yellow); button.text="CONECTAR" }
+        runOnUiThread { setDisconnected() }
         Thread {
             try {
-                DatagramSocket().use { udp ->
+                val address = DatagramSocket().use { udp ->
                     udp.broadcast = true
                     udp.soTimeout = 2500
                     val data = "ARGENTAS_DISCOVER".toByteArray()
-                    udp.send(DatagramPacket(data,data.size,InetAddress.getByName("255.255.255.255"),38472))
+                    udp.send(DatagramPacket(data, data.size, InetAddress.getByName("255.255.255.255"), 38472))
                     val buf = ByteArray(128)
-                    val packet = DatagramPacket(buf,buf.size)
+                    val packet = DatagramPacket(buf, buf.size)
                     udp.receive(packet)
-                    serverAddress = packet.address.hostAddress
+                    val response = String(packet.data, packet.offset, packet.length)
+                    if (response != "ARGENTAS_HERE") throw IllegalStateException("Invalid discovery response")
+                    packet.address.hostAddress
                 }
+                serverAddress = address
                 send(command)
             } catch (_: Exception) {
-                runOnUiThread {
-                    status.text="● No se encontró la tablet"
-                    status.setTextColor(red)
-                    hint.text="Conectá este teléfono a la red local de ARGENTAS e intentá otra vez."
-                    button.text="BUSCAR TABLET"
-                }
+                runOnUiThread { setDisconnected() }
             }
         }.start()
     }
 
     private fun send(command: String) {
-        val address=serverAddress ?: return discoverAndSend(command)
+        val address = serverAddress ?: return discoverAndSend(command)
         Thread {
             try {
-                Socket(address,38471).use { s ->
-                    s.soTimeout=4000
-                    PrintWriter(s.getOutputStream(),true).println("ARGENTAS1|$internalKey|$command")
-                    val response=BufferedReader(InputStreamReader(s.getInputStream(),Charsets.UTF_8)).readLine().orEmpty()
+                Socket(address, 38471).use { socket ->
+                    socket.soTimeout = 4000
+                    PrintWriter(socket.getOutputStream(), true).println("ARGENTAS1|$internalKey|$command")
+                    val response = BufferedReader(InputStreamReader(socket.getInputStream(), Charsets.UTF_8))
+                        .readLine().orEmpty()
                     runOnUiThread {
-                        if (response.startsWith("ERROR")) {
-                            serverAddress=null
-                            status.text="● No se pudo conectar"
-                            status.setTextColor(red)
-                            button.text="BUSCAR TABLET"
-                        } else {
-                            status.text="● Tablet conectada"
-                            status.setTextColor(Color.rgb(70,210,125))
-                            when {
-                                response=="STATUS|true" -> requestedOn=true
-                                response=="STATUS|false" -> requestedOn=false
-                                response=="QUEUED|ON" -> requestedOn=true
-                                response=="QUEUED|OFF" -> requestedOn=false
+                        when {
+                            response == "STATUS|true" -> requestedOn = true
+                            response == "STATUS|false" -> requestedOn = false
+                            response == "QUEUED|ON" -> requestedOn = true
+                            response == "QUEUED|OFF" -> requestedOn = false
+                            else -> {
+                                setDisconnected()
+                                return@runOnUiThread
                             }
-                            button.text=if(requestedOn) "DESACTIVAR WI-FI" else "ACTIVAR WI-FI"
-                            button.setBackgroundColor(if(requestedOn) red else yellow)
-                            button.setTextColor(if(requestedOn) Color.WHITE else Color.BLACK)
-                            hint.text=if(response.startsWith("QUEUED")) "Orden enviada. El servidor debe confirmar el estado real." else "Conexión establecida."
                         }
+                        setConnected()
                     }
                 }
             } catch (_: Exception) {
-                serverAddress=null
-                discoverAndSend(command)
+                runOnUiThread { setDisconnected() }
             }
         }.start()
     }
