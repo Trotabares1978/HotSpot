@@ -13,7 +13,6 @@ import android.widget.TextView
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.io.PrintWriter
-import java.lang.reflect.InvocationTargetException
 import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.net.ServerSocket
@@ -47,7 +46,7 @@ class MainActivity : Activity() {
             setTextColor(Color.rgb(255, 75, 75))
         }
         label = TextView(this).apply {
-            text = "Servidor listo"
+            text = "Esperando al celular"
             textSize = 20f
             typeface = Typeface.DEFAULT_BOLD
             gravity = Gravity.CENTER
@@ -69,7 +68,7 @@ class MainActivity : Activity() {
     private fun showConnection(connected: Boolean) {
         runOnUiThread {
             light.setTextColor(if (connected) Color.rgb(70, 210, 125) else Color.rgb(255, 75, 75))
-            label.text = if (connected) "Celular conectado" else "Esperando al celular"
+            label.text = if (connected) "Celular conectado · control remoto" else "Celular desconectado"
             label.setTextColor(if (connected) Color.rgb(70, 210, 125) else Color.rgb(255, 95, 95))
         }
     }
@@ -138,7 +137,8 @@ class MainActivity : Activity() {
                     udp.receive(packet)
                     val msg = String(packet.data, packet.offset, packet.length)
                     if (msg == "ARGENTAS_DISCOVER") {
-                        lastClientContact = System.currentTimeMillis()
+                        // Discovery only means the app is looking for the tablet.
+                        // Mark the phone connected only after an authenticated TCP command.
                         val data = "ARGENTAS_HERE".toByteArray()
                         udp.send(DatagramPacket(data, data.size, packet.address, packet.port))
                     }
