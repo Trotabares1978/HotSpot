@@ -198,12 +198,10 @@ class MainActivity : Activity() {
             try {
                 val address = DatagramSocket().use { udp ->
                     udp.broadcast = true
-                    udp.soTimeout = 900
+                    udp.soTimeout = 1800
                     val data = "ARGENTAS_DISCOVER".toByteArray()
                     val targets = linkedSetOf<InetAddress>()
                     targets.add(InetAddress.getByName("255.255.255.255"))
-                    // Some Android Wi-Fi networks drop the limited broadcast; also try
-                    // the subnet broadcast calculated from the active Wi-Fi DHCP lease.
                     try {
                         val wifi = applicationContext.getSystemService(WIFI_SERVICE) as WifiManager
                         val dhcp = wifi.dhcpInfo
@@ -218,24 +216,37 @@ class MainActivity : Activity() {
                             targets.add(InetAddress.getByAddress(bytes))
                         }
                     } catch (_: Exception) { }
+
                     var found: String? = null
-                    for (target in targets) {
-                        try {
-                            udp.send(DatagramPacket(data, data.size, target, 38472))
-                            val buf = ByteArray(128)
-                            val packet = DatagramPacket(buf, buf.size)
-                            udp.receive(packet)
-                            if (String(packet.data, packet.offset, packet.length) == "ARGENTAS_HERE") {
-                                found = packet.address.hostAddress
+                    // Repeat discovery because Android/HyperOS can drop the first UDP broadcast
+                    // while Wi-Fi is waking up or switching between networks.
+                    repeat(3) {
+                        if (found != null) return@repeat
+                        for (target in targets) {
+                            try {
+                                udp.send(DatagramPacket(data, data.size, target, 38472))
+                            } catch (_: Exception) { }
+                        }
+                        val deadline = System.currentTimeMillis() + 1800L
+                        while (found == null && System.currentTimeMillis() < deadline) {
+                            try {
+                                val buf = ByteArray(128)
+                                val packet = DatagramPacket(buf, buf.size)
+                                udp.receive(packet)
+                                if (String(packet.data, packet.offset, packet.length) == "ARGENTAS_HERE") {
+                                    found = packet.address.hostAddress
+                                }
+                            } catch (_: java.net.SocketTimeoutException) {
                                 break
                             }
-                        } catch (_: java.net.SocketTimeoutException) { }
+                        }
                     }
                     found ?: throw java.net.SocketTimeoutException("No se encontró la tablet en la red local")
                 }
                 serverAddress = address
                 send(command)
             } catch (_: Exception) {
+                serverAddress = null
                 renderState("connection_lost")
             }
         }.start()
