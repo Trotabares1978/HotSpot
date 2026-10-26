@@ -287,12 +287,12 @@ class MainActivity : Activity() {
                             try {
                                 val completion = java.util.concurrent.ExecutorCompletionService<String>(pool)
                                 hosts.forEach { candidate ->
-                                    completion.submit<String> {
+                                    completion.submit(java.util.concurrent.Callable<String> {
                                         Socket().use { socket ->
                                             socket.connect(java.net.InetSocketAddress(candidate, 38471), 400)
                                             candidate.hostAddress
                                         }
-                                    }
+                                    })
                                 }
                                 val deadline = System.currentTimeMillis() + 7000L
                                 var remaining = hosts.size
