@@ -5,6 +5,7 @@ import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.view.View
+import android.net.wifi.WifiManager
 import android.os.Bundle
 import android.view.Gravity
 import android.widget.Button
@@ -197,15 +198,40 @@ class MainActivity : Activity() {
             try {
                 val address = DatagramSocket().use { udp ->
                     udp.broadcast = true
-                    udp.soTimeout = 2500
+                    udp.soTimeout = 900
                     val data = "ARGENTAS_DISCOVER".toByteArray()
-                    udp.send(DatagramPacket(data, data.size, InetAddress.getByName("255.255.255.255"), 38472))
-                    val buf = ByteArray(128)
-                    val packet = DatagramPacket(buf, buf.size)
-                    udp.receive(packet)
-                    if (String(packet.data, packet.offset, packet.length) != "ARGENTAS_HERE")
-                        throw IllegalStateException("Respuesta de descubrimiento inválida")
-                    packet.address.hostAddress
+                    val targets = linkedSetOf<InetAddress>()
+                    targets.add(InetAddress.getByName("255.255.255.255"))
+                    // Some Android Wi-Fi networks drop the limited broadcast; also try
+                    // the subnet broadcast calculated from the active Wi-Fi DHCP lease.
+                    try {
+                        val wifi = applicationContext.getSystemService(WIFI_SERVICE) as WifiManager
+                        val dhcp = wifi.dhcpInfo
+                        if (dhcp.ipAddress != 0 && dhcp.netmask != 0) {
+                            val broadcast = (dhcp.ipAddress and dhcp.netmask) or dhcp.netmask.inv()
+                            val bytes = byteArrayOf(
+                                (broadcast and 0xff).toByte(),
+                                (broadcast shr 8 and 0xff).toByte(),
+                                (broadcast shr 16 and 0xff).toByte(),
+                                (broadcast shr 24 and 0xff).toByte()
+                            )
+                            targets.add(InetAddress.getByAddress(bytes))
+                        }
+                    } catch (_: Exception) { }
+                    var found: String? = null
+                    for (target in targets) {
+                        try {
+                            udp.send(DatagramPacket(data, data.size, target, 38472))
+                            val buf = ByteArray(128)
+                            val packet = DatagramPacket(buf, buf.size)
+                            udp.receive(packet)
+                            if (String(packet.data, packet.offset, packet.length) == "ARGENTAS_HERE") {
+                                found = packet.address.hostAddress
+                                break
+                            }
+                        } catch (_: java.net.SocketTimeoutException) { }
+                    }
+                    found ?: throw java.net.SocketTimeoutException("No se encontró la tablet en la red local")
                 }
                 serverAddress = address
                 send(command)
