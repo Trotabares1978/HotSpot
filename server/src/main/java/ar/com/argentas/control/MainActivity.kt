@@ -2,6 +2,7 @@ package ar.com.argentas.control
 
 import android.app.Activity
 import android.graphics.Color
+import android.graphics.Typeface
 import android.os.Bundle
 import android.view.Gravity
 import android.widget.LinearLayout
@@ -17,6 +18,7 @@ import java.security.MessageDigest
 class MainActivity : Activity() {
     private val internalKey = "argentas-local-control-v1"
     private lateinit var light: TextView
+    private lateinit var label: TextView
     @Volatile private var running = false
     @Volatile private var requested = "unknown"
     private var server: ServerSocket? = null
@@ -30,23 +32,43 @@ class MainActivity : Activity() {
             gravity = Gravity.CENTER
             setTextColor(Color.rgb(255, 75, 75))
         }
-        val root = LinearLayout(this).apply {
+        label = TextView(this).apply {
+            text = "Desconectado"
+            textSize = 20f
+            typeface = Typeface.DEFAULT_BOLD
             gravity = Gravity.CENTER
+            setTextColor(Color.rgb(255, 95, 95))
+            setPadding(0, 8, 0, 0)
+        }
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            setPadding(24, 24, 24, 24)
             setBackgroundColor(Color.rgb(18, 19, 21))
-            addView(light, LinearLayout.LayoutParams(-1, -1))
+            addView(light, LinearLayout.LayoutParams(-1, 180))
+            addView(label, LinearLayout.LayoutParams(-1, -2))
         }
         setContentView(root)
         startServer()
     }
 
+    private fun setConnection(connected: Boolean) {
+        runOnUiThread {
+            light.setTextColor(if (connected) Color.rgb(70, 210, 125) else Color.rgb(255, 75, 75))
+            label.text = if (connected) "Conectado" else "Desconectado"
+            label.setTextColor(if (connected) Color.rgb(70, 210, 125) else Color.rgb(255, 95, 95))
+        }
+    }
+
     private fun startServer() {
         if (running) return
+        setConnection(false)
         Thread {
             try {
                 val tcp = ServerSocket(38471)
                 server = tcp
                 running = true
-                runOnUiThread { light.setTextColor(Color.rgb(70, 210, 125)) }
+                setConnection(false)
                 Thread { discoverLoop() }.start()
                 while (running) {
                     val client = tcp.accept()
@@ -54,7 +76,7 @@ class MainActivity : Activity() {
                 }
             } catch (_: Exception) {
                 running = false
-                runOnUiThread { light.setTextColor(Color.rgb(255, 75, 75)) }
+                setConnection(false)
             }
         }.start()
     }
@@ -94,14 +116,19 @@ class MainActivity : Activity() {
                     return
                 }
                 when (parts[2]) {
-                    "STATUS" -> writer.println("STATUS|$requested")
+                    "STATUS" -> {
+                        writer.println("STATUS|$requested")
+                        setConnection(true)
+                    }
                     "ON" -> {
                         requested = "true"
                         writer.println("QUEUED|ON")
+                        setConnection(true)
                     }
                     "OFF" -> {
                         requested = "false"
                         writer.println("QUEUED|OFF")
+                        setConnection(true)
                     }
                     else -> writer.println("ERROR|UNKNOWN_COMMAND")
                 }
