@@ -58,7 +58,8 @@ class MainActivity : Activity() {
         }
         button = Button(this).apply {
             text = "ACTIVAR HOTSPOT"
-            textSize = 17f
+            textSize = 19f
+            minHeight = 72
             isAllCaps = false
             setTextColor(Color.BLACK)
             setBackgroundColor(green)
@@ -72,7 +73,7 @@ class MainActivity : Activity() {
         root.addView(title, LinearLayout.LayoutParams(-1, -2))
         root.addView(statusLight, LinearLayout.LayoutParams(-1, 100))
         root.addView(statusText, LinearLayout.LayoutParams(-1, -2))
-        root.addView(button, LinearLayout.LayoutParams(-1, -2))
+        root.addView(button, LinearLayout.LayoutParams(-1, 84))
         setContentView(root)
         discoverAndSend("STATUS")
     }
