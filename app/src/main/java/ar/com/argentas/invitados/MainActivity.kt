@@ -236,7 +236,11 @@ class MainActivity : Activity() {
                                 "false" -> false
                                 else -> null
                             }
-                        } else if (response.startsWith("QUEUED|")) {
+                        } else if (response == "QUEUED|ON") {
+                            lastRequestedState = true
+                            state.text = "Orden recibida por el servidor. Falta confirmar el estado real del hotspot."
+                        } else if (response == "QUEUED|OFF") {
+                            lastRequestedState = false
                             state.text = "Orden recibida por el servidor. Falta confirmar el estado real del hotspot."
                         }
                         render()
