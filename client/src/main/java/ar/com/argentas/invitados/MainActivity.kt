@@ -241,53 +241,74 @@ class MainActivity : Activity() {
                             }
                         }
                     }
-                    // UDP broadcast can be filtered by the router or Android Wi-Fi stack.
-                    // Fall back to probing TCP port 38471 on hosts in the same IPv4 subnet.
+                    // UDP broadcast can be filtered. Enumerate real IPv4 interfaces instead
+                    // of relying on WifiManager.dhcpInfo, which can be empty on recent Android.
                     if (found == null) {
+                        val subnets = linkedMapOf<String, List<InetAddress>>()
                         try {
-                            val wifi = applicationContext.getSystemService(WIFI_SERVICE) as WifiManager
-                            val dhcp = wifi.dhcpInfo
-                            if (dhcp.ipAddress != 0 && dhcp.netmask != 0) {
-                                val ip = dhcp.ipAddress
-                                val mask = dhcp.netmask
-                                val network = ip and mask
-                                val broadcast = network or mask.inv()
-                                val candidates = (network + 1..broadcast - 1)
-                                    .filter { it != ip }
-                                    .map { value ->
-                                        InetAddress.getByAddress(byteArrayOf(
-                                            (value and 0xff).toByte(),
-                                            (value shr 8 and 0xff).toByte(),
-                                            (value shr 16 and 0xff).toByte(),
-                                            (value shr 24 and 0xff).toByte()
-                                        ))
+                            val interfaces = java.net.NetworkInterface.getNetworkInterfaces()
+                            while (interfaces.hasMoreElements()) {
+                                val networkInterface = interfaces.nextElement()
+                                if (!networkInterface.isUp || networkInterface.isLoopback) continue
+                                for (ifa in networkInterface.interfaceAddresses) {
+                                    val local = ifa.address
+                                    if (local !is java.net.Inet4Address || local.isLoopbackAddress || local.isLinkLocalAddress) continue
+                                    val prefix = ifa.networkPrefixLength.toInt()
+                                    if (prefix !in 16..30) continue
+                                    val ipBytes = local.address
+                                    val ip = ((ipBytes[0].toInt() and 255) shl 24) or
+                                        ((ipBytes[1].toInt() and 255) shl 16) or
+                                        ((ipBytes[2].toInt() and 255) shl 8) or
+                                        (ipBytes[3].toInt() and 255)
+                                    val mask = if (prefix == 0) 0 else (-1 shl (32 - prefix))
+                                    val network = ip and mask
+                                    val broadcast = network or mask.inv()
+                                    val hostCount = broadcast - network - 1
+                                    // Avoid pathological scans on broad enterprise networks.
+                                    if (hostCount !in 1..1022) continue
+                                    val hosts = ArrayList<InetAddress>(hostCount)
+                                    for (value in (network + 1) until broadcast) {
+                                        if (value == ip) continue
+                                        hosts.add(InetAddress.getByAddress(byteArrayOf(
+                                            (value shr 24 and 255).toByte(),
+                                            (value shr 16 and 255).toByte(),
+                                            (value shr 8 and 255).toByte(),
+                                            (value and 255).toByte()
+                                        )))
                                     }
-                                val pool = java.util.concurrent.Executors.newFixedThreadPool(24)
-                                try {
-                                    val futures = candidates.map { candidate ->
-                                        pool.submit<String?> {
-                                            try {
-                                                Socket().use { socket ->
-                                                    socket.connect(java.net.InetSocketAddress(candidate, 38471), 250)
-                                                    candidate.hostAddress
-                                                }
-                                            } catch (_: Exception) { null }
-                                        }
-                                    }
-                                    for (future in futures) {
-                                        try {
-                                            val candidate = future.get(350, java.util.concurrent.TimeUnit.MILLISECONDS)
-                                            if (candidate != null) {
-                                                found = candidate
-                                                break
-                                            }
-                                        } catch (_: Exception) { }
-                                    }
-                                } finally {
-                                    pool.shutdownNow()
+                                    subnets[local.hostAddress] = hosts
                                 }
                             }
                         } catch (_: Exception) { }
+
+                        val hosts = subnets.values.flatten().distinct()
+                        if (hosts.isNotEmpty()) {
+                            val pool = java.util.concurrent.Executors.newFixedThreadPool(32)
+                            try {
+                                val completion = java.util.concurrent.ExecutorCompletionService<String>(pool)
+                                hosts.forEach { candidate ->
+                                    completion.submit<String> {
+                                        Socket().use { socket ->
+                                            socket.connect(java.net.InetSocketAddress(candidate, 38471), 400)
+                                            candidate.hostAddress
+                                        }
+                                    }
+                                }
+                                val deadline = System.currentTimeMillis() + 7000L
+                                var remaining = hosts.size
+                                while (found == null && remaining > 0) {
+                                    val wait = deadline - System.currentTimeMillis()
+                                    if (wait <= 0L) break
+                                    val future = completion.poll(wait, java.util.concurrent.TimeUnit.MILLISECONDS) ?: break
+                                    remaining--
+                                    try {
+                                        found = future.get()
+                                    } catch (_: Exception) { }
+                                }
+                            } finally {
+                                pool.shutdownNow()
+                            }
+                        }
                     }
                     found ?: throw java.net.SocketTimeoutException("No se encontró la tablet en la red local")
                 }
