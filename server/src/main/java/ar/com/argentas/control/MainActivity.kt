@@ -93,7 +93,7 @@ class MainActivity : Activity() {
     private fun setHotspotEnabled(enabled: Boolean): String {
         return try {
             val wifi = applicationContext.getSystemService(WIFI_SERVICE) as WifiManager
-            val method = wifi.javaClass.getDeclaredMethod("setWifiApEnabled", android.net.wifi.WifiConfiguration::class.java, Boolean::class.javaPrimitiveType)
+            val method = wifi.javaClass.getDeclaredMethod("setWifiApEnabled", android.net.wifi.WifiConfiguration::class.java, Boolean::class.javaPrimitiveType!!)
             method.isAccessible = true
             val accepted = method.invoke(wifi, null, enabled) as? Boolean ?: false
             if (!accepted) return "unavailable"
