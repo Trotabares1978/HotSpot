@@ -2,6 +2,9 @@ package ar.com.argentas.invitados
 
 import android.app.Activity
 import android.graphics.Color
+import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
+import android.view.View
 import android.os.Bundle
 import android.view.Gravity
 import android.widget.Button
@@ -26,65 +29,103 @@ class MainActivity : Activity() {
     private lateinit var statusLight: TextView
     private lateinit var statusText: TextView
     private lateinit var button: Button
+    private lateinit var connectionHint: TextView
+
+    private fun rounded(color: Int, radius: Float = 22f): GradientDrawable = GradientDrawable().apply {
+        setColor(color)
+        cornerRadius = radius * resources.displayMetrics.density
+    }
+
+    private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        window.statusBarColor = bg
+        window.navigationBarColor = bg
+
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER
-            setPadding(24, 36, 24, 36)
+            gravity = Gravity.CENTER_HORIZONTAL
+            setPadding(dp(24), dp(28), dp(24), dp(24))
             setBackgroundColor(bg)
         }
-        val title = TextView(this).apply {
+        val brand = TextView(this).apply {
             text = "ARGENTAS"
-            textSize = 30f
+            textSize = 29f
+            letterSpacing = 0.10f
+            typeface = Typeface.create("sans-serif-black", Typeface.BOLD)
             gravity = Gravity.CENTER
             setTextColor(Color.WHITE)
-            setPadding(0, 0, 0, 8)
         }
         val subtitle = TextView(this).apply {
-            text = "CONTROL DEL HOTSPOT"
-            textSize = 13f
-            letterSpacing = 0.18f
+            text = "PANEL DE CONTROL"
+            textSize = 12f
+            letterSpacing = 0.20f
             gravity = Gravity.CENTER
-            setTextColor(Color.rgb(170, 177, 187))
-            setPadding(0, 0, 0, 36)
+            setTextColor(Color.rgb(155, 163, 175))
+            setPadding(0, dp(5), 0, dp(24))
+        }
+        val statusCard = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            setPadding(dp(18), dp(18), dp(18), dp(18))
+            background = rounded(Color.rgb(30, 32, 37), 24f)
         }
         statusLight = TextView(this).apply {
             text = "●"
-            textSize = 76f
+            textSize = 52f
             gravity = Gravity.CENTER
-            setTextColor(red)
+            setTextColor(yellow)
             contentDescription = "Estado del hotspot desconocido"
         }
         statusText = TextView(this).apply {
-            text = "Desconectado"
-            textSize = 23f
+            text = "Buscando tablet…"
+            textSize = 20f
+            typeface = Typeface.DEFAULT_BOLD
             gravity = Gravity.CENTER
-            setTextColor(red)
-            setPadding(0, 4, 0, 28)
+            setTextColor(Color.WHITE)
+            setPadding(0, dp(8), 0, dp(4))
         }
+        connectionHint = TextView(this).apply {
+            text = "Conectate a la misma red Wi-Fi que la tablet"
+            textSize = 13f
+            gravity = Gravity.CENTER
+            setTextColor(Color.rgb(170, 177, 187))
+        }
+        statusCard.addView(statusLight, LinearLayout.LayoutParams(-1, dp(76)))
+        statusCard.addView(statusText, LinearLayout.LayoutParams(-1, -2))
+        statusCard.addView(connectionHint, LinearLayout.LayoutParams(-1, -2))
+
         button = Button(this).apply {
             text = "ACTIVAR HOTSPOT"
-            textSize = 19f
-            minHeight = 72
+            textSize = 17f
+            typeface = Typeface.create("sans-serif", Typeface.BOLD)
+            minHeight = dp(68)
             isAllCaps = false
-            setTextColor(Color.BLACK)
-            setBackgroundColor(green)
+            setPadding(dp(12), dp(12), dp(12), dp(12))
+            setTextColor(Color.rgb(15, 22, 18))
+            background = rounded(green, 18f)
+            stateListAnimator = null
             setOnClickListener {
                 isEnabled = false
+                text = "CONECTANDO…"
                 val address = serverAddress
                 if (address == null) discoverAndSend(if (hotspotOn) "OFF" else "ON")
                 else send(if (hotspotOn) "OFF" else "ON")
             }
         }
-        root.addView(title, LinearLayout.LayoutParams(-1, -2))
+        val footer = TextView(this).apply {
+            text = "El control funciona cuando ambas aplicaciones están abiertas en la misma red."
+            textSize = 12f
+            gravity = Gravity.CENTER
+            setTextColor(Color.rgb(126, 133, 145))
+            setPadding(dp(12), dp(20), dp(12), 0)
+        }
+        root.addView(brand, LinearLayout.LayoutParams(-1, -2))
         root.addView(subtitle, LinearLayout.LayoutParams(-1, -2))
-        root.addView(statusLight, LinearLayout.LayoutParams(-1, 110))
-        root.addView(statusText, LinearLayout.LayoutParams(-1, -2))
-        val buttonParams = LinearLayout.LayoutParams(-1, 76)
-        buttonParams.topMargin = 16
-        root.addView(button, buttonParams)
+        root.addView(statusCard, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(22) })
+        root.addView(button, LinearLayout.LayoutParams(-1, dp(70)))
+        root.addView(footer, LinearLayout.LayoutParams(-1, -2))
         setContentView(root)
         discoverAndSend("STATUS")
     }
@@ -96,26 +137,29 @@ class MainActivity : Activity() {
                 "enabled" -> {
                     hotspotOn = true
                     statusLight.setTextColor(green)
-                    statusText.text = "Conectado"
+                    statusText.text = "HOTSPOT ACTIVADO"
                     statusText.setTextColor(green)
                     button.text = "DESACTIVAR HOTSPOT"
                     button.setBackgroundColor(red)
                     button.setTextColor(Color.WHITE)
+                    connectionHint.text = "La tablet confirmó que está activo"
                     statusLight.contentDescription = "Hotspot conectado"
                 }
                 "disabled" -> {
                     hotspotOn = false
                     statusLight.setTextColor(red)
-                    statusText.text = "Desconectado"
+                    statusText.text = "HOTSPOT APAGADO"
                     statusText.setTextColor(red)
                     button.text = "ACTIVAR HOTSPOT"
                     button.setBackgroundColor(green)
                     button.setTextColor(Color.BLACK)
+                    connectionHint.text = "Podés activarlo con el botón de abajo"
                     statusLight.contentDescription = "Hotspot desconectado"
                 }
                 "unavailable" -> {
                     statusLight.setTextColor(yellow)
-                    statusText.text = "Estado del hotspot sin confirmar"
+                    statusText.text = "ESTADO SIN CONFIRMAR"
+                    connectionHint.text = "La tablet no pudo verificar el cambio"
                     statusText.setTextColor(yellow)
                     button.text = if (hotspotOn) "DESACTIVAR HOTSPOT" else "ACTIVAR HOTSPOT"
                     button.setBackgroundColor(yellow)
@@ -124,7 +168,8 @@ class MainActivity : Activity() {
                 }
                 "settings" -> {
                     statusLight.setTextColor(yellow)
-                    statusText.text = "Confirmá el hotspot en la tablet"
+                    statusText.text = "REVISÁ LA TABLET"
+                    connectionHint.text = "Se abrió Ajustes para completar la acción"
                     statusText.setTextColor(yellow)
                     button.text = "VOLVER A COMPROBAR"
                     button.setBackgroundColor(yellow)
@@ -134,7 +179,8 @@ class MainActivity : Activity() {
                 else -> {
                     serverAddress = null
                     statusLight.setTextColor(red)
-                    statusText.text = "Desconectado de la tablet"
+                    statusText.text = "TABLET NO ENCONTRADA"
+                    connectionHint.text = "Abrí ARGENTAS · Control en la tablet y usá la misma Wi-Fi"
                     statusText.setTextColor(red)
                     button.text = if (hotspotOn) "DESACTIVAR HOTSPOT" else "ACTIVAR HOTSPOT"
                     button.setBackgroundColor(green)
