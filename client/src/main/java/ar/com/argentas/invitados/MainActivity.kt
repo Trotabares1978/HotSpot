@@ -241,6 +241,54 @@ class MainActivity : Activity() {
                             }
                         }
                     }
+                    // UDP broadcast can be filtered by the router or Android Wi-Fi stack.
+                    // Fall back to probing TCP port 38471 on hosts in the same IPv4 subnet.
+                    if (found == null) {
+                        try {
+                            val wifi = applicationContext.getSystemService(WIFI_SERVICE) as WifiManager
+                            val dhcp = wifi.dhcpInfo
+                            if (dhcp.ipAddress != 0 && dhcp.netmask != 0) {
+                                val ip = dhcp.ipAddress
+                                val mask = dhcp.netmask
+                                val network = ip and mask
+                                val broadcast = network or mask.inv()
+                                val candidates = (network + 1..broadcast - 1)
+                                    .filter { it != ip }
+                                    .map { value ->
+                                        InetAddress.getByAddress(byteArrayOf(
+                                            (value and 0xff).toByte(),
+                                            (value shr 8 and 0xff).toByte(),
+                                            (value shr 16 and 0xff).toByte(),
+                                            (value shr 24 and 0xff).toByte()
+                                        ))
+                                    }
+                                val pool = java.util.concurrent.Executors.newFixedThreadPool(24)
+                                try {
+                                    val futures = candidates.map { candidate ->
+                                        pool.submit<String?> {
+                                            try {
+                                                Socket().use { socket ->
+                                                    socket.connect(java.net.InetSocketAddress(candidate, 38471), 250)
+                                                    candidate.hostAddress
+                                                }
+                                            } catch (_: Exception) { null }
+                                        }
+                                    }
+                                    for (future in futures) {
+                                        try {
+                                            val candidate = future.get(350, java.util.concurrent.TimeUnit.MILLISECONDS)
+                                            if (candidate != null) {
+                                                found = candidate
+                                                break
+                                            }
+                                        } catch (_: Exception) { }
+                                    }
+                                } finally {
+                                    pool.shutdownNow()
+                                }
+                            }
+                        } catch (_: Exception) { }
+                    }
                     found ?: throw java.net.SocketTimeoutException("No se encontró la tablet en la red local")
                 }
                 serverAddress = address
