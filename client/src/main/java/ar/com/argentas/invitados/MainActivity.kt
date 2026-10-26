@@ -115,7 +115,7 @@ class MainActivity : Activity() {
             }
         }
         val footer = TextView(this).apply {
-            text = "El control funciona cuando ambas aplicaciones están abiertas en la misma red."
+            text = "ARGENTAS INVITADOS · v1.1.0\nAmbas aplicaciones deben estar abiertas en la misma red."
             textSize = 12f
             gravity = Gravity.CENTER
             setTextColor(Color.rgb(126, 133, 145))
