@@ -246,6 +246,26 @@ class MainActivity : Activity() {
                     button.setTextColor(Color.BLACK)
                     statusLight.contentDescription = "Requiere confirmación en la tablet"
                 }
+                "delta_setup" -> {
+                    statusLight.setTextColor(yellow)
+                    statusText.text = "FALTA CONFIGURAR EL CONTROL"
+                    connectionHint.text = "Instalá Delta y Shizuku en la tablet, iniciá Shizuku y autorizá Delta. Después activá la compatibilidad Tasker en Delta."
+                    statusText.setTextColor(yellow)
+                    button.text = if (hotspotOn) "DESACTIVAR HOTSPOT" else "ACTIVAR HOTSPOT"
+                    button.setBackgroundColor(yellow)
+                    button.setTextColor(Color.BLACK)
+                    statusLight.contentDescription = "Falta configurar Delta y Shizuku en la tablet"
+                }
+                "delta_failed" -> {
+                    statusLight.setTextColor(yellow)
+                    statusText.text = "HOTSPOT SIN CONFIRMAR"
+                    connectionHint.text = "Delta no confirmó el cambio. Revisá que Shizuku esté activo y autorizado para Delta en la tablet."
+                    statusText.setTextColor(yellow)
+                    button.text = "VOLVER A COMPROBAR"
+                    button.setBackgroundColor(yellow)
+                    button.setTextColor(Color.BLACK)
+                    statusLight.contentDescription = "No se pudo confirmar el estado del hotspot"
+                }
                 else -> {
                     if (state.startsWith("unavailable:")) {
                         statusLight.setTextColor(yellow)
@@ -406,7 +426,7 @@ class MainActivity : Activity() {
         Thread {
             try {
                 Socket(address, 38471).use { socket ->
-                    socket.soTimeout = 5000
+                    socket.soTimeout = 25000
                     PrintWriter(socket.getOutputStream(), true).println("ARGENTAS1|$internalKey|$command")
                     val response = BufferedReader(InputStreamReader(socket.getInputStream(), Charsets.UTF_8))
                         .readLine().orEmpty()
@@ -419,6 +439,8 @@ class MainActivity : Activity() {
                         response == "RESULT|pending" -> renderState("pending")
                         response == "OPEN_SETTINGS|permission" -> renderState("permission")
                         response == "OPEN_SETTINGS|hotspot" -> renderState("hotspot_manual")
+                        response == "ERROR|DELTA_REQUIRED" -> renderState("delta_setup")
+                        response == "ERROR|DELTA_NOT_CONFIRMED" -> renderState("delta_failed")
                         response.startsWith("OPEN_SETTINGS|") -> renderState("settings")
                         response.startsWith("ERROR|HOTSPOT_CONTROL_UNAVAILABLE|unavailable:") -> renderState(response.substringAfterLast("|"))
                         response.startsWith("ERROR|HOTSPOT_CONTROL_UNAVAILABLE") -> renderState("unavailable")
