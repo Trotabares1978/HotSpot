@@ -359,6 +359,8 @@ class MainActivity : Activity() {
                         else if (state == "settings_required") writer.println("OPEN_SETTINGS|settings")
                         else if (state == "permission_required" || state == "permission_denied") writer.println("OPEN_SETTINGS|permission")
                         else if (state == "pending") writer.println("RESULT|pending")
+                        else if (state == "delta_required") writer.println("ERROR|DELTA_REQUIRED")
+                        else if (state == "delta_not_confirmed") writer.println("ERROR|DELTA_NOT_CONFIRMED")
                         else if (state.startsWith("unavailable:")) writer.println("ERROR|HOTSPOT_CONTROL_UNAVAILABLE|$state")
                         else writer.println("ERROR|HOTSPOT_CONTROL_UNAVAILABLE")
                     }
