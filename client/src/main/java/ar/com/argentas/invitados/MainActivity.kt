@@ -325,7 +325,7 @@ class MainActivity : Activity() {
                                             (value and 255).toByte()
                                         )))
                                     }
-                                    subnets[local.hostAddress] = hosts
+                                    subnets[local.hostAddress ?: continue] = hosts
                                 }
                             }
                         } catch (_: Exception) { }
