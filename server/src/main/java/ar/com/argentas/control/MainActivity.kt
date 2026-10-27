@@ -153,14 +153,59 @@ class MainActivity : Activity() {
     }
 
     private fun setHotspotEnabled(enabled: Boolean): String {
-        // Android 16 restricts third-party apps from starting/stopping tethering
-        // unless they hold the system-only TETHER_PRIVILEGED permission. Open the
-        // system panel instead of calling APIs that cannot compile or work for this app.
+        // Android 16 exposes the supported tethering API. WRITE_SETTINGS is declared
+        // in the manifest; the system still decides whether the user granted it.
         if (Build.VERSION.SDK_INT >= 36) {
-            runOnUiThread { openHotspotSettings() }
-            return "settings_required"
+            return try {
+                val tethering = getSystemService(android.net.TetheringManager::class.java)
+                    ?: return "unavailable"
+                if (!Settings.System.canWrite(this)) {
+                    runOnUiThread {
+                        detail.text = "Falta permiso de modificación de ajustes para controlar el hotspot."
+                        startActivity(Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS).apply {
+                            data = android.net.Uri.parse("package:$packageName")
+                        })
+                    }
+                    return "permission_required"
+                }
+                if (!enabled) {
+                    tethering.stopTethering(android.net.TetheringManager.TETHERING_WIFI)
+                    handler.removeCallbacks(autoOff)
+                    Thread.sleep(900L)
+                    return hotspotState()
+                }
+                val latch = java.util.concurrent.CountDownLatch(1)
+                var result = "unavailable"
+                val request = android.net.TetheringManager.TetheringRequest.Builder(
+                    android.net.TetheringManager.TETHERING_WIFI
+                ).build()
+                tethering.startTethering(
+                    request,
+                    java.util.concurrent.Executor { command -> command.run() },
+                    object : android.net.TetheringManager.StartTetheringCallback() {
+                        override fun onTetheringStarted() {
+                            result = "enabled"
+                            latch.countDown()
+                        }
+                        override fun onTetheringFailed(error: Int) {
+                            result = "unavailable:$error"
+                            latch.countDown()
+                        }
+                    }
+                )
+                if (!latch.await(8, java.util.concurrent.TimeUnit.SECONDS)) return "pending"
+                if (result == "enabled") {
+                    handler.removeCallbacks(autoOff)
+                    handler.postDelayed(autoOff, 10 * 60 * 1000L)
+                }
+                result
+            } catch (e: SecurityException) {
+                "permission_denied"
+            } catch (_: Exception) {
+                "unavailable"
+            }
         }
-        // Legacy fallback for older Android versions. It may be blocked by the OEM.
+        // Legacy fallback for older Android versions. OEMs may block this hidden API.
         return try {
             val wifi = applicationContext.getSystemService(WIFI_SERVICE) as WifiManager
             val method = wifi.javaClass.getDeclaredMethod("setWifiApEnabled", android.net.wifi.WifiConfiguration::class.java, Boolean::class.javaPrimitiveType!!)
