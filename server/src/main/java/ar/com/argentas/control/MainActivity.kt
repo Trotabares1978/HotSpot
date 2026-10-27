@@ -212,15 +212,9 @@ class MainActivity : Activity() {
             return try {
                 val tethering = getSystemService(android.net.TetheringManager::class.java)
                     ?: return "unavailable"
-                if (!Settings.System.canWrite(this)) {
-                    runOnUiThread {
-                        detail.text = "Falta permiso para modificar ajustes."
-                        startActivity(Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS).apply {
-                            data = android.net.Uri.parse("package:$packageName")
-                        })
-                    }
-                    return "permission_required"
-                }
+                // Android 16 may reject the public tethering API even when the
+                // app has WRITE_SETTINGS. Do not stop here: Delta/Shizuku is the
+                // supported privileged fallback and does not depend on this grant.
                 val request = android.net.TetheringManager.TetheringRequest.Builder(
                     android.net.TetheringManager.TETHERING_WIFI
                 ).build()
@@ -253,7 +247,9 @@ class MainActivity : Activity() {
                         })
                 }
                 if (!latch.await(8, java.util.concurrent.TimeUnit.SECONDS)) return "pending"
-                if (result == "unavailable:14") return setHotspotThroughDelta(enabled)
+                // Try Delta/Shizuku for any API-level tethering rejection, not
+                // only error 14; OEM builds report equivalent restrictions differently.
+                if (result.startsWith("unavailable:")) return setHotspotThroughDelta(enabled)
                 if (result == "enabled") {
                     handler.removeCallbacks(autoOff)
                     handler.postDelayed(autoOff, 10 * 60 * 1000L)
