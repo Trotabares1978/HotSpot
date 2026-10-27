@@ -206,6 +206,16 @@ class MainActivity : Activity() {
                     button.setTextColor(Color.BLACK)
                     statusLight.contentDescription = "Estado del hotspot no confirmado"
                 }
+                "pending" -> {
+                    statusLight.setTextColor(yellow)
+                    statusText.text = "ESPERANDO CONFIRMACIÓN"
+                    connectionHint.text = "La tablet recibió la orden; comprobando el resultado."
+                    statusText.setTextColor(yellow)
+                    button.text = if (hotspotOn) "DESACTIVAR HOTSPOT" else "ACTIVAR HOTSPOT"
+                    button.setBackgroundColor(yellow)
+                    button.setTextColor(Color.BLACK)
+                    statusLight.contentDescription = "Esperando confirmación del hotspot"
+                }
                 "permission" -> {
                     statusLight.setTextColor(yellow)
                     statusText.text = "AUTORIZACIÓN REQUERIDA"
@@ -385,6 +395,7 @@ class MainActivity : Activity() {
                         response == "STATUS|unavailable" -> renderState("unavailable")
                         response == "RESULT|enabled" -> renderState("enabled")
                         response == "RESULT|disabled" -> renderState("disabled")
+                        response == "RESULT|pending" -> renderState("pending")
                         response == "OPEN_SETTINGS|permission" -> renderState("permission")
                         response.startsWith("OPEN_SETTINGS|") -> renderState("settings")
                         response.startsWith("ERROR|HOTSPOT_CONTROL_UNAVAILABLE") -> renderState("unavailable")
