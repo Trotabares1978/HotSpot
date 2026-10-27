@@ -237,15 +237,26 @@ class MainActivity : Activity() {
                     statusLight.contentDescription = "Requiere confirmación en la tablet"
                 }
                 else -> {
-                    serverAddress = null
-                    statusLight.setTextColor(red)
-                    statusText.text = "TABLET NO ENCONTRADA"
-                    connectionHint.text = "Abrí ARGENTAS · Control en la tablet y usá la misma Wi-Fi"
-                    statusText.setTextColor(red)
-                    button.text = if (hotspotOn) "DESACTIVAR HOTSPOT" else "ACTIVAR HOTSPOT"
-                    button.setBackgroundColor(green)
-                    button.setTextColor(Color.BLACK)
-                    statusLight.contentDescription = "Sin conexión con la tablet"
+                    if (state.startsWith("unavailable:")) {
+                        statusLight.setTextColor(yellow)
+                        statusText.text = "ANDROID RECHAZÓ LA ORDEN"
+                        connectionHint.text = "Código de error: " + state.substringAfter("unavailable:")
+                        statusText.setTextColor(yellow)
+                        button.text = if (hotspotOn) "DESACTIVAR HOTSPOT" else "ACTIVAR HOTSPOT"
+                        button.setBackgroundColor(yellow)
+                        button.setTextColor(Color.BLACK)
+                        statusLight.contentDescription = "Android rechazó el comando de hotspot"
+                    } else {
+                        serverAddress = null
+                        statusLight.setTextColor(red)
+                        statusText.text = "TABLET NO ENCONTRADA"
+                        connectionHint.text = "Abrí ARGENTAS · Control en la tablet y usá la misma Wi-Fi"
+                        statusText.setTextColor(red)
+                        button.text = if (hotspotOn) "DESACTIVAR HOTSPOT" else "ACTIVAR HOTSPOT"
+                        button.setBackgroundColor(green)
+                        button.setTextColor(Color.BLACK)
+                        statusLight.contentDescription = "Sin conexión con la tablet"
+                    }
                 }
             }
         }
@@ -398,6 +409,7 @@ class MainActivity : Activity() {
                         response == "RESULT|pending" -> renderState("pending")
                         response == "OPEN_SETTINGS|permission" -> renderState("permission")
                         response.startsWith("OPEN_SETTINGS|") -> renderState("settings")
+                        response.startsWith("ERROR|HOTSPOT_CONTROL_UNAVAILABLE|unavailable:") -> renderState(response.substringAfterLast("|"))
                         response.startsWith("ERROR|HOTSPOT_CONTROL_UNAVAILABLE") -> renderState("unavailable")
                         response.startsWith("ERROR|") -> renderState("unavailable")
                         else -> renderState("unavailable")
