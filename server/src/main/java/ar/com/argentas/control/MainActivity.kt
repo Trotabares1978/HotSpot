@@ -263,7 +263,13 @@ class MainActivity : Activity() {
                             }
                         })
                 }
-                if (!latch.await(8, java.util.concurrent.TimeUnit.SECONDS)) return "pending"
+                if (!latch.await(8, java.util.concurrent.TimeUnit.SECONDS)) {
+                    // A missing callback is not evidence that the operation succeeded.
+                    // Try the privileged route instead of returning "pending" and
+                    // silently skipping the only fallback that can control HyperOS.
+                    Log.w(TAG, "Android tethering callback timed out; trying Delta/Shizuku")
+                    return setHotspotThroughDelta(enabled)
+                }
                 // Try Delta/Shizuku for any API-level tethering rejection, not
                 // only error 14; OEM builds report equivalent restrictions differently.
                 if (result.startsWith("unavailable:")) return setHotspotThroughDelta(enabled)
@@ -281,8 +287,8 @@ class MainActivity : Activity() {
                 Log.w(TAG, "Public tethering API threw SecurityException; trying Delta/Shizuku", e)
                 setHotspotThroughDelta(enabled)
             } catch (e: Exception) {
-                Log.e(TAG, "Unexpected tethering control error", e)
-                "unavailable"
+                Log.e(TAG, "Unexpected tethering control error; trying Delta/Shizuku", e)
+                setHotspotThroughDelta(enabled)
             }
         }
         return try {
