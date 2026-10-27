@@ -164,6 +164,49 @@ class MainActivity : Activity() {
         }
     }
 
+    /**
+     * Android 16 rejects direct third-party tethering control with error 14.
+     * Delta can perform the operation through Shizuku when it has been configured
+     * on this tablet and its Tasker-compatible broadcast receiver is enabled.
+     */
+    private fun setHotspotThroughDelta(enabled: Boolean): String {
+        val action = if (enabled) {
+            "dev.shadoe.delta.action.START_SOFT_AP"
+        } else {
+            "dev.shadoe.delta.action.STOP_SOFT_AP"
+        }
+        return try {
+            packageManager.getPackageInfo("dev.shadoe.delta", 0)
+            val intent = Intent(action).setClassName(
+                "dev.shadoe.delta",
+                "dev.shadoe.delta.SoftApBroadcastReceiver"
+            )
+            sendBroadcast(intent)
+
+            // Delta's broadcast API does not return a result, so verify by polling
+            // the observed hotspot state instead of claiming success immediately.
+            val expected = if (enabled) "enabled" else "disabled"
+            val deadline = System.currentTimeMillis() + 7000L
+            while (System.currentTimeMillis() < deadline) {
+                if (hotspotState() == expected) {
+                    if (enabled) {
+                        handler.removeCallbacks(autoOff)
+                        handler.postDelayed(autoOff, 10 * 60 * 1000L)
+                    } else {
+                        handler.removeCallbacks(autoOff)
+                    }
+                    return expected
+                }
+                Thread.sleep(350L)
+            }
+            "delta_not_confirmed"
+        } catch (_: android.content.pm.PackageManager.NameNotFoundException) {
+            "delta_required"
+        } catch (_: Exception) {
+            "delta_not_confirmed"
+        }
+    }
+
     private fun setHotspotEnabled(enabled: Boolean): String {
         if (Build.VERSION.SDK_INT >= 36) {
             return try {
@@ -210,6 +253,7 @@ class MainActivity : Activity() {
                         })
                 }
                 if (!latch.await(8, java.util.concurrent.TimeUnit.SECONDS)) return "pending"
+                if (result == "unavailable:14") return setHotspotThroughDelta(enabled)
                 if (result == "enabled") {
                     handler.removeCallbacks(autoOff)
                     handler.postDelayed(autoOff, 10 * 60 * 1000L)
