@@ -1,4 +1,5 @@
 name: Android build
+# Rebuild both APKs for each fix on feature/hotspot-real-state.
 
 on:
   push:
