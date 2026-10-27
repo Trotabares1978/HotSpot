@@ -302,6 +302,7 @@ class MainActivity : Activity() {
                         if (state == "enabled") writer.println("RESULT|enabled")
                         else if (state == "settings_required" || state == "permission_required" || state == "permission_denied") writer.println("OPEN_SETTINGS|permission")
                         else if (state == "pending") writer.println("RESULT|pending")
+                        else if (state.startsWith("unavailable:")) writer.println("ERROR|HOTSPOT_CONTROL_UNAVAILABLE|$state")
                         else writer.println("ERROR|HOTSPOT_CONTROL_UNAVAILABLE")
                     }
                     "OFF" -> {
@@ -310,6 +311,7 @@ class MainActivity : Activity() {
                         else if (state == "settings_required") writer.println("OPEN_SETTINGS|settings")
                         else if (state == "permission_required" || state == "permission_denied") writer.println("OPEN_SETTINGS|permission")
                         else if (state == "pending") writer.println("RESULT|pending")
+                        else if (state.startsWith("unavailable:")) writer.println("ERROR|HOTSPOT_CONTROL_UNAVAILABLE|$state")
                         else writer.println("ERROR|HOTSPOT_CONTROL_UNAVAILABLE")
                     }
                     else -> writer.println("ERROR|UNKNOWN_COMMAND")
