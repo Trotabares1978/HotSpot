@@ -120,11 +120,7 @@ class MainActivity : Activity() {
         super.onResume()
         if (!::detail.isInitialized) return
         if (Build.VERSION.SDK_INT >= 36) {
-            detail.text = if (Settings.System.canWrite(this)) {
-                "Permiso de ajustes concedido. Volvé al celular y tocá ACTIVAR HOTSPOT."
-            } else {
-                "Para controlar el hotspot, habilitá «Permitir modificar ajustes del sistema» para ARGENTAS · Control."
-            }
+            detail.text = "Control remoto listo. El hotspot se gestiona mediante Android y Delta/Shizuku; el permiso de modificar ajustes no garantiza que HyperOS permita activarlo."
         }
     }
 
@@ -228,7 +224,7 @@ class MainActivity : Activity() {
         if (Build.VERSION.SDK_INT >= 36) {
             return try {
                 val tethering = getSystemService(android.net.TetheringManager::class.java)
-                    ?: return "unavailable"
+                    ?: return setHotspotThroughDelta(enabled)
                 // Android 16 may reject the public tethering API even when the
                 // app has WRITE_SETTINGS. Do not stop here: Delta/Shizuku is the
                 // supported privileged fallback and does not depend on this grant.
@@ -279,8 +275,11 @@ class MainActivity : Activity() {
                 }
                 result
             } catch (e: SecurityException) {
-                Log.e(TAG, "Missing permission to control tethering", e)
-                "permission_denied"
+                // A synchronous permission denial must not bypass the privileged
+                // Delta/Shizuku route. Android OEMs may reject before invoking
+                // the asynchronous callback, so treat both paths consistently.
+                Log.w(TAG, "Public tethering API threw SecurityException; trying Delta/Shizuku", e)
+                setHotspotThroughDelta(enabled)
             } catch (e: Exception) {
                 Log.e(TAG, "Unexpected tethering control error", e)
                 "unavailable"
