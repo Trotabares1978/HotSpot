@@ -219,7 +219,7 @@ class MainActivity : Activity() {
                 "permission" -> {
                     statusLight.setTextColor(yellow)
                     statusText.text = "AUTORIZACIÓN REQUERIDA"
-                    connectionHint.text = "Permití modificar ajustes a ARGENTAS · Control y volvé a tocar el botón"
+                    connectionHint.text = "Android no autorizó el control directo. La tablet debe intentar Delta/Shizuku; el permiso de modificar ajustes por sí solo no habilita el hotspot."
                     statusText.setTextColor(yellow)
                     button.text = if (hotspotOn) "DESACTIVAR HOTSPOT" else "ACTIVAR HOTSPOT"
                     button.setBackgroundColor(yellow)
@@ -259,7 +259,7 @@ class MainActivity : Activity() {
                 "delta_failed" -> {
                     statusLight.setTextColor(yellow)
                     statusText.text = "HOTSPOT SIN CONFIRMAR"
-                    connectionHint.text = "Delta no confirmó el cambio. Revisá que Shizuku esté activo y autorizado para Delta en la tablet."
+                    connectionHint.text = "La orden se envió, pero no pudimos verificar el estado real. Puede fallar la ejecución en Delta/Shizuku o la lectura del estado en HyperOS; no reinstales ni repitas ajustes sin revisar el diagnóstico."
                     statusText.setTextColor(yellow)
                     button.text = "VOLVER A COMPROBAR"
                     button.setBackgroundColor(yellow)
