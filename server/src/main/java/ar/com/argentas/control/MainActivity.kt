@@ -156,6 +156,42 @@ class MainActivity : Activity() {
     }
 
     private fun hotspotState(): String {
+        // Android 16 exposes a supported tethering-state callback. Prefer it over
+        // WifiManager.getWifiApState(), a hidden API that OEM builds can block or
+        // return inconsistently even when the hotspot operation itself succeeded.
+        if (Build.VERSION.SDK_INT >= 36) {
+            try {
+                val tethering = getSystemService(android.net.TetheringManager::class.java)
+                    ?: throw IllegalStateException("TetheringManager unavailable")
+                val latch = java.util.concurrent.CountDownLatch(1)
+                var observed = "unavailable"
+                val callback = object : android.net.TetheringManager.TetheringEventCallback {
+                    override fun onTetheredInterfacesChanged(
+                        interfaces: Set<android.net.TetheringInterface>
+                    ) {
+                        observed = if (interfaces.any {
+                            it.type == android.net.TetheringManager.TETHERING_WIFI
+                        }) "enabled" else "disabled"
+                        latch.countDown()
+                    }
+                }
+                try {
+                    tethering.registerTetheringEventCallback(
+                        java.util.concurrent.Executor { task -> task.run() }, callback
+                    )
+                    if (latch.await(1500, java.util.concurrent.TimeUnit.MILLISECONDS)) {
+                        Log.d(TAG, "Hotspot state from TetheringManager=$observed")
+                        return observed
+                    }
+                    Log.w(TAG, "TetheringManager state callback timed out; trying legacy state")
+                } finally {
+                    try { tethering.unregisterTetheringEventCallback(callback) }
+                    catch (e: Exception) { Log.d(TAG, "Tethering callback cleanup: ${e.javaClass.simpleName}") }
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Unable to read state from TetheringManager; trying legacy state", e)
+            }
+        }
         return try {
             val wifi = applicationContext.getSystemService(WIFI_SERVICE) as WifiManager
             val method = wifi.javaClass.getDeclaredMethod("getWifiApState")
