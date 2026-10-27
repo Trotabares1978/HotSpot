@@ -283,7 +283,8 @@ class MainActivity : Activity() {
                     "ON" -> {
                         val state = setHotspotEnabled(true)
                         if (state == "enabled") writer.println("RESULT|enabled")
-                        else if (state == "settings_required") writer.println("OPEN_SETTINGS|settings")
+                        else if (state == "settings_required" || state == "permission_required") writer.println("OPEN_SETTINGS|permission")
+                        else if (state == "pending") writer.println("RESULT|pending")
                         else writer.println("ERROR|HOTSPOT_CONTROL_UNAVAILABLE")
                     }
                     "OFF" -> {
