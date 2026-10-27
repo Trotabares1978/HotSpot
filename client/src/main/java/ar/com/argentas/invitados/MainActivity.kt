@@ -226,6 +226,16 @@ class MainActivity : Activity() {
                     button.setTextColor(Color.BLACK)
                     statusLight.contentDescription = "Falta autorización para controlar el hotspot"
                 }
+                "hotspot_manual" -> {
+                    statusLight.setTextColor(yellow)
+                    statusText.text = "ACTIVACIÓN MANUAL EN TABLET"
+                    connectionHint.text = "HyperOS bloqueó el encendido remoto. En la tablet, activá Punto de acceso portátil y volvé acá para comprobarlo."
+                    statusText.setTextColor(yellow)
+                    button.text = "VOLVER A COMPROBAR"
+                    button.setBackgroundColor(yellow)
+                    button.setTextColor(Color.BLACK)
+                    statusLight.contentDescription = "Se requiere activar el hotspot manualmente en la tablet"
+                }
                 "settings" -> {
                     statusLight.setTextColor(yellow)
                     statusText.text = "REVISÁ LA TABLET"
@@ -408,6 +418,7 @@ class MainActivity : Activity() {
                         response == "RESULT|disabled" -> renderState("disabled")
                         response == "RESULT|pending" -> renderState("pending")
                         response == "OPEN_SETTINGS|permission" -> renderState("permission")
+                        response == "OPEN_SETTINGS|hotspot" -> renderState("hotspot_manual")
                         response.startsWith("OPEN_SETTINGS|") -> renderState("settings")
                         response.startsWith("ERROR|HOTSPOT_CONTROL_UNAVAILABLE|unavailable:") -> renderState(response.substringAfterLast("|"))
                         response.startsWith("ERROR|HOTSPOT_CONTROL_UNAVAILABLE") -> renderState("unavailable")
