@@ -60,6 +60,15 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Keep the process important while the screen is locked. This service
+        // does not change the existing TCP/UDP protocol or Delta/Shizuku logic.
+        try {
+            val keepAlive = Intent(this, ControlKeepAliveService::class.java)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(keepAlive)
+            else startService(keepAlive)
+        } catch (e: Exception) {
+            Log.e(TAG, "Unable to start control keep-alive service", e)
+        }
         light = TextView(this).apply {
             text = "●"
             textSize = 88f
