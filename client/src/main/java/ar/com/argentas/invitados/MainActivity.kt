@@ -1,6 +1,11 @@
 package ar.com.argentas.invitados
 
 import android.app.Activity
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
@@ -31,6 +36,13 @@ class MainActivity : Activity() {
     private lateinit var statusText: TextView
     private lateinit var button: Button
     private lateinit var connectionHint: TextView
+    private val networkHandler = Handler(Looper.getMainLooper())
+    private val heartbeat = object : Runnable {
+        override fun run() {
+            if (serverAddress != null) send("STATUS") else discoverAndSend("STATUS")
+            networkHandler.postDelayed(this, 5000L)
+        }
+    }
 
     private fun rounded(color: Int, radius: Float = 22f): GradientDrawable = GradientDrawable().apply {
         setColor(color)
@@ -128,7 +140,34 @@ class MainActivity : Activity() {
         root.addView(button, LinearLayout.LayoutParams(-1, dp(70)))
         root.addView(footer, LinearLayout.LayoutParams(-1, -2))
         setContentView(root)
-        discoverAndSend("STATUS")
+        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.NEARBY_WIFI_DEVICES) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(arrayOf(Manifest.permission.NEARBY_WIFI_DEVICES), 4102)
+        } else {
+            discoverAndSend("STATUS")
+            networkHandler.postDelayed(heartbeat, 5000L)
+        }
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 4102) {
+            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                discoverAndSend("STATUS")
+                networkHandler.removeCallbacks(heartbeat)
+                networkHandler.postDelayed(heartbeat, 5000L)
+            } else {
+                runOnUiThread {
+                    statusText.text = "PERMISO DE RED NECESARIO"
+                    statusLight.setTextColor(yellow)
+                    connectionHint.text = "Permití Dispositivos cercanos para conectar con la tablet"
+                }
+            }
+        }
+    }
+
+    override fun onDestroy() {
+        networkHandler.removeCallbacks(heartbeat)
+        super.onDestroy()
     }
 
     private fun renderState(state: String) {
