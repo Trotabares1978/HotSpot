@@ -9,8 +9,8 @@ android {
         applicationId = "ar.com.argentas.invitados"
         minSdk = 26
         targetSdk = 28
-        versionCode = 2
-        versionName = "1.0.0"
+        versionCode = 3
+        versionName = "1.1.0"
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

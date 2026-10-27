@@ -1,20 +1,26 @@
-# ARGENTAS - Invitados
+# ARGENTAS · Control de hotspot
 
-Android project split into two APKs:
+Proyecto Android con dos APK generadas por GitHub Actions:
 
-- **ARGENTAS - Invitados** (`:client`): simplified guest-facing app with a prominent action button, connection status, and saved tablet address/access code.
-- **ARGENTAS - Control** (`:server`): tablet-side dashboard that receives client commands.
+- **ARGENTAS-Invitados.apk**: control remoto desde el celular.
+- **ARGENTAS-Control-Tablet.apk**: servidor y panel en la tablet.
 
-## Build
+## Compilar y descargar
 
-GitHub Actions runs `gradle assembleDebug` and uploads the generated APKs as the artifact `argentas-invitados-debug`. The artifact contains both module APKs.
+El workflow **Android build** compila los módulos `:client` y `:server`. El artefacto **ARGENTAS-APKs** contiene ambos APK en la raíz del ZIP con nombres claros.
 
-## Important prototype limitations
+## Requisitos y límites del control
 
-The dedicated server currently records requested ON/OFF state but **does not yet toggle the real Android/HyperOS hotspot**. The 10-minute auto-off behavior also still needs implementation in this server module. Do not treat the requested state as proof of the actual hotspot state. These features require implementation and testing on the target Redmi Pad.
+El encendido y apagado del punto de acceso está restringido por Android y puede variar según la versión y la personalización del fabricante (incluido HyperOS). En Android 16, la app intenta la API pública de `TetheringManager` y recurre a Delta/Shizuku si Android rechaza la operación, no devuelve una confirmación a tiempo o lanza una excepción.
 
-The client and tablet must be reachable over the same local network. The current TCP protocol is not encrypted; use only on a trusted network and do not reuse a sensitive password as the access code.
+Para la vía Delta se requiere que Delta esté instalado en la tablet, Shizuku esté iniciado y autorizado, y la integración Tasker/receptor de Delta esté habilitada. La app envía la acción explícita de Delta, pero ese broadcast no devuelve un resultado directo. Por eso la app intenta comprobar el estado observado del hotspot; si la lectura de estado no funciona en esa versión de Android/HyperOS, el resultado puede quedar como **no confirmado** aunque se haya enviado la orden. Una compilación exitosa no sustituye la prueba en la tablet real.
 
-- `client/`: guest app
-- `server/`: tablet controller app
-- `app/`: legacy combined prototype retained for reference; it is no longer included in the build.
+La indicación de conexión celular-tablet es independiente del estado del hotspot. El servidor considera activa la conexión solo después de recibir un comando autenticado y deja de mostrarla como activa tras 15 segundos sin contacto.
+
+## Red local y seguridad
+
+Ambos dispositivos deben poder comunicarse por la red local. El prototipo usa TCP sin cifrado y un secreto compartido integrado en el código; no debe utilizarse en redes públicas o no confiables. El secreto integrado no es un mecanismo de seguridad robusto frente a alguien que pueda inspeccionar el APK. Para uso fuera de una red estrictamente controlada, se debe implementar autenticación configurable y protección criptográfica del canal.
+
+## Alcance de la validación
+
+CI comprueba que los módulos compilan y que los APK se empaquetan. No puede verificar el comportamiento real del hotspot en una tablet física. La confirmación final requiere probar encendido, apagado, lectura del estado y apagado automático en el dispositivo objetivo.

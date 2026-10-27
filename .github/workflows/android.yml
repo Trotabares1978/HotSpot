@@ -1,7 +1,10 @@
 name: Android build
+# Rebuild both APKs for each fix on feature/hotspot-real-state.
 
 on:
   push:
+    branches: [ "main", "feature/hotspot-real-state" ]
+  pull_request:
     branches: [ "main" ]
   workflow_dispatch:
 
@@ -22,10 +25,15 @@ jobs:
           gradle-version: "8.9"
       - name: Build both APKs
         run: gradle assembleDebug
-      - name: Upload APKs
+      - name: Prepare easy-to-find APKs
+        run: |
+          mkdir -p dist
+          cp client/build/outputs/apk/debug/client-debug.apk dist/ARGENTAS-Invitados.apk
+          cp server/build/outputs/apk/debug/server-debug.apk dist/ARGENTAS-Control-Tablet.apk
+      - name: Upload APKs (files at ZIP root)
         uses: actions/upload-artifact@v4
         with:
-          name: argentas-invitados-debug
-          path: |
-            client/build/outputs/apk/debug/client-debug.apk
-            server/build/outputs/apk/debug/server-debug.apk
+          name: ARGENTAS-APKs
+          path: dist/*.apk
+          if-no-files-found: error
+          compression-level: 0
