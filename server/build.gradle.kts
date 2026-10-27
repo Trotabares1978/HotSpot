@@ -4,7 +4,7 @@ plugins {
 }
 android {
     namespace = "ar.com.argentas.control"
-    compileSdk = 35
+    compileSdk = 36
     defaultConfig {
         applicationId = "ar.com.argentas.control"
         minSdk = 26
