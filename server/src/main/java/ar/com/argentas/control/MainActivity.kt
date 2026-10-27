@@ -14,6 +14,7 @@ import android.net.wifi.WifiManager
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import android.view.Gravity
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -37,7 +38,17 @@ class MainActivity : Activity() {
     private var server: ServerSocket? = null
     private var discovery: DatagramSocket? = null
     private val handler = Handler(Looper.getMainLooper())
-    private val autoOff = Runnable { setHotspotEnabled(false) }
+    private val autoOff = Runnable {
+        // Tethering callbacks and Delta verification can block; never run on the UI thread.
+        Thread({
+            val result = setHotspotEnabled(false)
+            Log.i(TAG, "Automatic hotspot timeout result=$result")
+        }, "argentas-hotspot-auto-off").start()
+    }
+
+    companion object {
+        private const val TAG = "ArgentasControl"
+    }
     private val connectionMonitor = object : Runnable {
         override fun run() {
             val connected = running && lastClientContact > 0L &&
@@ -159,7 +170,8 @@ class MainActivity : Activity() {
                 11, 12 -> "unavailable"
                 else -> "unavailable"
             }
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            Log.w(TAG, "Unable to read hotspot state", e)
             "unavailable"
         }
     }
@@ -177,11 +189,13 @@ class MainActivity : Activity() {
         }
         return try {
             packageManager.getPackageInfo("dev.shadoe.delta", 0)
+            Log.i(TAG, "Sending Delta action=$action")
             val intent = Intent(action).setClassName(
                 "dev.shadoe.delta",
                 "dev.shadoe.delta.SoftApBroadcastReceiver"
             )
             sendBroadcast(intent)
+            Log.i(TAG, "Delta broadcast sent; waiting for hotspot state")
 
             // Delta's broadcast API does not return a result, so verify by polling
             // the observed hotspot state instead of claiming success immediately.
@@ -199,10 +213,13 @@ class MainActivity : Activity() {
                 }
                 Thread.sleep(350L)
             }
+            Log.e(TAG, "Delta action sent but hotspot state was not confirmed")
             "delta_not_confirmed"
-        } catch (_: android.content.pm.PackageManager.NameNotFoundException) {
+        } catch (e: android.content.pm.PackageManager.NameNotFoundException) {
+            Log.e(TAG, "Delta is not installed")
             "delta_required"
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to invoke Delta action", e)
             "delta_not_confirmed"
         }
     }
@@ -225,10 +242,12 @@ class MainActivity : Activity() {
                     tethering.startTethering(request, executor,
                         object : android.net.TetheringManager.StartTetheringCallback {
                             override fun onTetheringStarted() {
+                                Log.i(TAG, "Android reported tethering started")
                                 result = "enabled"
                                 latch.countDown()
                             }
                             override fun onTetheringFailed(error: Int) {
+                                Log.w(TAG, "Android rejected tethering start error=$error")
                                 result = "unavailable:$error"
                                 latch.countDown()
                             }
@@ -237,10 +256,12 @@ class MainActivity : Activity() {
                     tethering.stopTethering(request, executor,
                         object : android.net.TetheringManager.StopTetheringCallback {
                             override fun onStopTetheringSucceeded() {
+                                Log.i(TAG, "Android reported tethering stopped")
                                 result = "disabled"
                                 latch.countDown()
                             }
                             override fun onStopTetheringFailed(error: Int) {
+                                Log.w(TAG, "Android rejected tethering stop error=$error")
                                 result = "unavailable:$error"
                                 latch.countDown()
                             }
@@ -257,9 +278,11 @@ class MainActivity : Activity() {
                     handler.removeCallbacks(autoOff)
                 }
                 result
-            } catch (_: SecurityException) {
+            } catch (e: SecurityException) {
+                Log.e(TAG, "Missing permission to control tethering", e)
                 "permission_denied"
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                Log.e(TAG, "Unexpected tethering control error", e)
                 "unavailable"
             }
         }
@@ -290,10 +313,12 @@ class MainActivity : Activity() {
                     val client = tcp.accept()
                     Thread { handle(client) }.start()
                 }
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                Log.e(TAG, "TCP server stopped unexpectedly", e)
                 running = false
                 handler.removeCallbacks(connectionMonitor)
                 showConnection(false)
+                runOnUiThread { detail.text = "Error del servidor de control: " + e.javaClass.simpleName }
             }
         }.start()
     }
@@ -315,7 +340,8 @@ class MainActivity : Activity() {
                     }
                 }
             }
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            if (running) Log.w(TAG, "UDP discovery stopped", e)
         }
     }
 
@@ -362,7 +388,11 @@ class MainActivity : Activity() {
                     }
                     else -> writer.println("ERROR|UNKNOWN_COMMAND")
                 }
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to handle a client command", e)
+                try {
+                    PrintWriter(s.getOutputStream(), true).println("ERROR|SERVER_EXCEPTION|" + e.javaClass.simpleName)
+                } catch (_: Exception) { }
             }
         }
     }
