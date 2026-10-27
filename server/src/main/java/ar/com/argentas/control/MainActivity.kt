@@ -1,6 +1,9 @@
 package ar.com.argentas.control
 
 import android.app.Activity
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.content.Intent
 import android.provider.Settings
 import android.widget.Button
@@ -97,7 +100,17 @@ class MainActivity : Activity() {
             addView(settingsButton, LinearLayout.LayoutParams(-1, dp(60)))
         }
         setContentView(root)
-        startServer()
+        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.NEARBY_WIFI_DEVICES) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(arrayOf(Manifest.permission.NEARBY_WIFI_DEVICES), 4103)
+        } else startServer()
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 4103) {
+            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) startServer()
+            else runOnUiThread { detail.text = "Permití Dispositivos cercanos para aceptar la conexión del celular." }
+        }
     }
 
     private fun showConnection(connected: Boolean) {
