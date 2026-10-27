@@ -6,11 +6,6 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.content.Intent
 import android.provider.Settings
-import android.net.TetheringManager
-import android.os.Build
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.Executors
 import android.widget.Button
 import android.graphics.Color
 import android.graphics.Typeface
@@ -158,54 +153,12 @@ class MainActivity : Activity() {
     }
 
     private fun setHotspotEnabled(enabled: Boolean): String {
-        // Android 16 (API 36) exposes the supported tethering API. It requires the
-        // user-grantable WRITE_SETTINGS special access for ordinary apps on supported builds.
+        // Android 16 restricts third-party apps from starting/stopping tethering
+        // unless they hold the system-only TETHER_PRIVILEGED permission. Open the
+        // system panel instead of calling APIs that cannot compile or work for this app.
         if (Build.VERSION.SDK_INT >= 36) {
-            if (!Settings.System.canWrite(this)) {
-                runOnUiThread {
-                    try {
-                        startActivity(Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS).apply {
-                            data = android.net.Uri.parse("package:$packageName")
-                        })
-                    } catch (_: Exception) {
-                        detail.text = "Concedé permiso de modificar ajustes a ARGENTAS · Control."
-                    }
-                }
-                return "permission_required"
-            }
-            return try {
-                val manager = getSystemService(TETHERING_SERVICE) as TetheringManager
-                val latch = CountDownLatch(1)
-                var success = false
-                val executor = Executors.newSingleThreadExecutor()
-                try {
-                    if (enabled) {
-                        manager.startTethering(
-                            TetheringManager.TetheringRequest.Builder(TetheringManager.TETHERING_WIFI).build(),
-                            executor,
-                            object : TetheringManager.StartTetheringCallback() {
-                                override fun onTetheringStarted() { success = true; latch.countDown() }
-                                override fun onTetheringFailed(error: Int) { success = false; latch.countDown() }
-                            }
-                        )
-                    } else {
-                        manager.stopTethering(
-                            TetheringManager.TetheringRequest.Builder(TetheringManager.TETHERING_WIFI).build(),
-                            executor,
-                            object : TetheringManager.StopTetheringCallback() {
-                                override fun onTetheringStopped() { success = true; latch.countDown() }
-                                override fun onTetheringFailed(error: Int) { success = false; latch.countDown() }
-                            }
-                        )
-                    }
-                    if (!latch.await(20, TimeUnit.SECONDS) || !success) return "unavailable"
-                    if (enabled) handler.postDelayed(autoOff, 10 * 60 * 1000L) else handler.removeCallbacks(autoOff)
-                    // Confirm from system state rather than assuming the callback is enough.
-                    Thread.sleep(1000L)
-                    hotspotState()
-                } finally { executor.shutdownNow() }
-            } catch (_: SecurityException) { "permission_required" }
-              catch (_: Exception) { "unavailable" }
+            runOnUiThread { openHotspotSettings() }
+            return "settings_required"
         }
         // Legacy fallback for older Android versions. It may be blocked by the OEM.
         return try {
@@ -285,7 +238,7 @@ class MainActivity : Activity() {
                     "ON" -> {
                         val state = setHotspotEnabled(true)
                         if (state == "enabled") writer.println("RESULT|enabled")
-                        else if (state == "permission_required") writer.println("OPEN_SETTINGS|permission")
+                        else if (state == "settings_required") writer.println("OPEN_SETTINGS|settings")
                         else writer.println("ERROR|HOTSPOT_CONTROL_UNAVAILABLE")
                     }
                     "OFF" -> {
