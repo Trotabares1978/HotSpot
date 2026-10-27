@@ -105,6 +105,18 @@ class MainActivity : Activity() {
         } else startServer()
     }
 
+    override fun onResume() {
+        super.onResume()
+        if (!::detail.isInitialized) return
+        if (Build.VERSION.SDK_INT >= 36) {
+            detail.text = if (Settings.System.canWrite(this)) {
+                "Permiso de ajustes concedido. Volvé al celular y tocá ACTIVAR HOTSPOT."
+            } else {
+                "Para controlar el hotspot, habilitá «Permitir modificar ajustes del sistema» para ARGENTAS · Control."
+            }
+        }
+    }
+
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == 4103) {
@@ -288,7 +300,7 @@ class MainActivity : Activity() {
                     "ON" -> {
                         val state = setHotspotEnabled(true)
                         if (state == "enabled") writer.println("RESULT|enabled")
-                        else if (state == "settings_required" || state == "permission_required") writer.println("OPEN_SETTINGS|permission")
+                        else if (state == "settings_required" || state == "permission_required" || state == "permission_denied") writer.println("OPEN_SETTINGS|permission")
                         else if (state == "pending") writer.println("RESULT|pending")
                         else writer.println("ERROR|HOTSPOT_CONTROL_UNAVAILABLE")
                     }
@@ -296,7 +308,7 @@ class MainActivity : Activity() {
                         val state = setHotspotEnabled(false)
                         if (state == "disabled") writer.println("RESULT|disabled")
                         else if (state == "settings_required") writer.println("OPEN_SETTINGS|settings")
-                        else if (state == "permission_required") writer.println("OPEN_SETTINGS|permission")
+                        else if (state == "permission_required" || state == "permission_denied") writer.println("OPEN_SETTINGS|permission")
                         else if (state == "pending") writer.println("RESULT|pending")
                         else writer.println("ERROR|HOTSPOT_CONTROL_UNAVAILABLE")
                     }
