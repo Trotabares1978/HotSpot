@@ -206,6 +206,16 @@ class MainActivity : Activity() {
                     button.setTextColor(Color.BLACK)
                     statusLight.contentDescription = "Estado del hotspot no confirmado"
                 }
+                "permission" -> {
+                    statusLight.setTextColor(yellow)
+                    statusText.text = "AUTORIZACIÓN REQUERIDA"
+                    connectionHint.text = "Permití modificar ajustes a ARGENTAS · Control y volvé a tocar el botón"
+                    statusText.setTextColor(yellow)
+                    button.text = if (hotspotOn) "DESACTIVAR HOTSPOT" else "ACTIVAR HOTSPOT"
+                    button.setBackgroundColor(yellow)
+                    button.setTextColor(Color.BLACK)
+                    statusLight.contentDescription = "Falta autorización para controlar el hotspot"
+                }
                 "settings" -> {
                     statusLight.setTextColor(yellow)
                     statusText.text = "REVISÁ LA TABLET"
@@ -375,6 +385,7 @@ class MainActivity : Activity() {
                         response == "STATUS|unavailable" -> renderState("unavailable")
                         response == "RESULT|enabled" -> renderState("enabled")
                         response == "RESULT|disabled" -> renderState("disabled")
+                        response == "OPEN_SETTINGS|permission" -> renderState("permission")
                         response.startsWith("OPEN_SETTINGS|") -> renderState("settings")
                         response.startsWith("ERROR|HOTSPOT_CONTROL_UNAVAILABLE") -> renderState("unavailable")
                         response.startsWith("ERROR|") -> renderState("unavailable")
