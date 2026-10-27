@@ -187,8 +187,12 @@ class MainActivity : Activity() {
                 } else {
                     tethering.stopTethering(request, executor,
                         object : android.net.TetheringManager.StopTetheringCallback {
-                            override fun onStopTetheringResult(error: Int) {
-                                result = if (error == android.net.TetheringManager.TETHER_ERROR_NO_ERROR) "disabled" else "unavailable:$error"
+                            override fun onStopTetheringSucceeded() {
+                                result = "disabled"
+                                latch.countDown()
+                            }
+                            override fun onStopTetheringFailed(error: Int) {
+                                result = "unavailable:$error"
                                 latch.countDown()
                             }
                         })
